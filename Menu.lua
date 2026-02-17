@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- Custom Saved Locations
 local CustomLocations = {}
 
 local function getSafeUI()
@@ -67,17 +66,6 @@ end
 makeDraggable(mainFrame)
 makeDraggable(openBtn)
 
--- Close/Open Logic
-local hideBtn = Instance.new("TextButton", mainFrame)
-hideBtn.Size = UDim2.new(0, 30, 0, 30)
-hideBtn.Position = UDim2.new(1, -35, 0, 5)
-hideBtn.BackgroundTransparency = 1
-hideBtn.Text = "X"
-hideBtn.TextColor3 = Color3.fromRGB(255, 60, 60)
-hideBtn.Font = Enum.Font.GothamBold
-hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
-openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
-
 -- UI Helpers
 local function createBtn(text, pos, color, parent)
     local btn = Instance.new("TextButton", parent or mainFrame)
@@ -87,7 +75,8 @@ local function createBtn(text, pos, color, parent)
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 11
+    btn.ClipsDescendants = true
     Instance.new("UICorner", btn)
     return btn
 end
@@ -105,87 +94,119 @@ local function createInput(placeholder, pos)
     return box
 end
 
--- Toggles & Speed Inputs
-local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.06, 0), Color3.fromRGB(0, 255, 120))
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.12, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.18, 0), Color3.fromRGB(255, 60, 60))
+-- Top Controls
+local hideBtn = createBtn("X", UDim2.new(0.8, 0, 0.01, 0), Color3.fromRGB(255, 60, 60))
+hideBtn.Size = UDim2.new(0, 30, 0, 30)
+hideBtn.BackgroundTransparency = 1
+hideBtn.TextSize = 18
 
-local walkInput = createInput("Walk Speed (16)...", UDim2.new(0.05, 0, 0.25, 0))
-local flyInput = createInput("Fly Speed (20)...", UDim2.new(0.05, 0, 0.31, 0))
-local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.37, 0), Color3.new(1,1,1))
+local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.07, 0), Color3.fromRGB(0, 255, 120))
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.13, 0), Color3.fromRGB(255, 60, 60))
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
+
+-- Speed Inputs
+local walkInput = createInput("Walk Speed (16)...", UDim2.new(0.05, 0, 0.26, 0))
+local flyInput = createInput("Fly Speed (20)...", UDim2.new(0.05, 0, 0.32, 0))
+local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
 -- PLAYER DROPDOWN
-local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.45, 0), Color3.new(1,1,1))
+local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.46, 0), Color3.new(1,1,1))
 local pScroll = Instance.new("ScrollingFrame", mainFrame)
 pScroll.Size = UDim2.new(0.9, 0, 0, 80)
-pScroll.Position = UDim2.new(0.05, 0, 0.51, 0)
+pScroll.Position = UDim2.new(0.05, 0, 0.52, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 pScroll.Visible = false
-Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 5)
+pScroll.CanvasSize = UDim2.new(0,0,0,0)
+Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
 -- LOCATION DROPDOWN
-local lDropTitle = createBtn("Game Locations ▽", UDim2.new(0.05, 0, 0.67, 0), Color3.new(1,1,1))
-local savePosBtn = createBtn("Save Current Pos", UDim2.new(0.05, 0, 0.73, 0), Color3.fromRGB(255, 200, 0))
+local lDropTitle = createBtn("Game Locations ▽", UDim2.new(0.05, 0, 0.68, 0), Color3.new(1,1,1))
+local savePosBtn = createBtn("Save Current Pos", UDim2.new(0.05, 0, 0.74, 0), Color3.fromRGB(255, 200, 0))
 local lScroll = Instance.new("ScrollingFrame", mainFrame)
 lScroll.Size = UDim2.new(0.9, 0, 0, 100)
-lScroll.Position = UDim2.new(0.05, 0, 0.79, 0)
+lScroll.Position = UDim2.new(0.05, 0, 0.80, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
-Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 5)
+lScroll.CanvasSize = UDim2.new(0,0,0,0)
+Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- LOGIC: Speeds
+-- LOGIC: Update Players
+local function updatePlayerList()
+    for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= Player then
+            local btn = createBtn(p.DisplayName, UDim2.new(0, 0, 0, 0), Color3.new(1,1,1), pScroll)
+            btn.Size = UDim2.new(1, 0, 0, 25)
+            btn.MouseButton1Click:Connect(function()
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    Player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                end
+            end)
+        end
+    end
+    pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
+end
+
+-- LOGIC: Update Locations
+local function updateLocList()
+    for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    
+    -- Scan Workspace
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("SpawnLocation") or (obj:IsA("BasePart") and (obj.Name:lower():find("teleport") or obj.Name:lower():find("goal"))) then
+            local btn = createBtn(obj.Name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
+            btn.Size = UDim2.new(1, 0, 0, 25)
+            btn.MouseButton1Click:Connect(function()
+                Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 5, 0))
+            end)
+        end
+    end
+    
+    -- Add Custom
+    for name, pos in pairs(CustomLocations) do
+        local btn = createBtn("[Saved] " .. name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(255, 200, 0), lScroll)
+        btn.Size = UDim2.new(1, 0, 0, 25)
+        btn.MouseButton1Click:Connect(function()
+            Player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+        end)
+    end
+    lScroll.CanvasSize = UDim2.new(0, 0, 0, #lScroll:GetChildren() * 27)
+end
+
+-- Event Listeners
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
--- LOGIC: Auto-Location Scanner
-local function getGameLocations()
-    local found = {}
-    -- Add Spawn Points
-    for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("SpawnLocation") then
-            found[obj.Name or "Spawn"] = obj.Position + Vector3.new(0, 5, 0)
-        elseif obj:IsA("Model") and (obj.Name:lower():find("shop") or obj.Name:lower():find("teleport")) then
-            local root = obj:FindFirstChildWhichIsA("BasePart")
-            if root then found[obj.Name] = root.Position end
-        end
-    end
-    -- Add Custom saved ones
-    for name, pos in pairs(CustomLocations) do found["[Saved] "..name] = pos end
-    return found
-end
-
-local function updateLocList()
-    for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    local locs = getGameLocations()
-    for name, pos in pairs(locs) do
-        local btn = createBtn(name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
-        btn.MouseButton1Click:Connect(function()
-            if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                Player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
-            end
-        end)
-    end
-    lScroll.CanvasSize = UDim2.new(0,0,0, #lScroll:GetChildren() * 35)
-end
-
 savePosBtn.MouseButton1Click:Connect(function()
-    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        local name = "Loc "..(#CustomLocations + 1)
-        CustomLocations[name] = Player.Character.HumanoidRootPart.Position
-        updateLocList()
-    end
+    local pos = Player.Character.HumanoidRootPart.Position
+    local name = "Loc " .. (#lScroll:GetChildren() + 1)
+    CustomLocations[name] = pos
+    if lDropOpen then updateLocList() end
 end)
 
--- LOGIC: Standard Loops
+pDropTitle.MouseButton1Click:Connect(function()
+    pDropOpen = not pDropOpen
+    pScroll.Visible = pDropOpen
+    if pDropOpen then updatePlayerList() end
+end)
+
+lDropTitle.MouseButton1Click:Connect(function()
+    lDropOpen = not lDropOpen
+    lScroll.Visible = lDropOpen
+    if lDropOpen then updateLocList() end
+end)
+
+hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
+openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
+
+-- ESP, Fly, and Physics Loops
 local bv = Instance.new("BodyVelocity")
 RunService.Stepped:Connect(function()
     local char = Player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
+    if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
+    local hum, root = char.Humanoid, char.HumanoidRootPart
 
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
@@ -200,25 +221,12 @@ RunService.Stepped:Connect(function()
         bv.Parent = root
         bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
         local moveDir = hum.MoveDirection
-        local upDir = 0
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then upDir = -1 end
-        bv.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, upDir * flySpeedValue, 0)
+        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
+        bv.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
     end
 end)
 
--- Handlers for Player list & ESP (existing logic)
-pDropTitle.MouseButton1Click:Connect(function()
-    pDropOpen = not pDropOpen
-    pScroll.Visible = pDropOpen
-end)
-
-lDropTitle.MouseButton1Click:Connect(function()
-    lDropOpen = not lDropOpen
-    lScroll.Visible = lDropOpen
-    if lDropOpen then updateLocList() end
-end)
-
+-- Buttons for Toggles
 espBtn.MouseButton1Click:Connect(function()
     espEnabled = not espEnabled
     espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
@@ -235,4 +243,22 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled
     noclipBtn.Text = noclipEnabled and "Noclip: ON" or "Noclip: OFF"
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
+-- ESP Loop
+task.spawn(function()
+    while task.wait(0.5) do
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= Player and p.Character then
+                local hl = p.Character:FindFirstChild("VortexESP")
+                if espEnabled then
+                    if not hl then 
+                        hl = Instance.new("Highlight", p.Character) 
+                        hl.Name = "VortexESP" 
+                        hl.FillColor = Color3.fromRGB(255, 0, 0) 
+                    end
+                elseif hl then hl:Destroy() end
+            end
+        end
+    end
 end)
