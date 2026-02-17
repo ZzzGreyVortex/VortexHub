@@ -23,7 +23,7 @@ local walkSpeedValue = 16
 local flySpeedValue = 20
 local pDropOpen = false
 local lDropOpen = false
-local flyBV = nil -- Variable to hold the BodyVelocity
+local flyBV = nil
 
 -- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
@@ -49,7 +49,7 @@ openBtn.Visible = false
 openBtn.Active = true
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
 
--- DRAGGING LOGIC
+-- Draggable Logic
 local function makeDraggable(gui)
     local dragging, dragInput, dragStart, startPos
     local function update(input)
@@ -114,6 +114,7 @@ local walkInput = createInput("Walk Speed...", UDim2.new(0.05, 0, 0.26, 0))
 local flyInput = createInput("Fly Speed...", UDim2.new(0.05, 0, 0.32, 0))
 local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
+-- Dropdowns
 local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.46, 0), Color3.new(1,1,1))
 local pScroll = Instance.new("ScrollingFrame", mainFrame)
 pScroll.Size = UDim2.new(0.9, 0, 0, 80)
@@ -132,7 +133,6 @@ lScroll.Visible = false
 lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Function: Refresh Player List
 local function updatePlayerList()
     for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
@@ -151,18 +151,17 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- Refresh Loops (ESP & Player List)
+-- Main Loops (ESP + List)
 task.spawn(function()
     while task.wait(0.5) do
         if pDropOpen then updatePlayerList() end
         
-        -- BOX ESP LOGIC (Replaced Highlights to stop flickering)
+        -- ESP Logic
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                 local espBox = p.Character:FindFirstChild("VortexBox")
                 if espEnabled then
                     if not espBox then
-                        -- Create BoxHandleAdornment (Limitless, no flicker)
                         espBox = Instance.new("BoxHandleAdornment")
                         espBox.Name = "VortexBox"
                         espBox.Parent = p.Character
@@ -173,7 +172,6 @@ task.spawn(function()
                         espBox.Color3 = Color3.new(1, 0, 0)
                         espBox.Transparency = 0.5
                     else
-                        -- Update size in case character animation changes
                         espBox.Size = p.Character:GetExtentsSize()
                         espBox.Adornee = p.Character
                     end
@@ -185,7 +183,17 @@ task.spawn(function()
     end
 end)
 
--- Visual Toggles
+-- Toggle & Physics Logic
+local function toggleCollisions(enable)
+    if Player.Character then
+        for _, part in pairs(Player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = enable
+            end
+        end
+    end
+end
+
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
@@ -196,13 +204,17 @@ local function updateToggles()
     noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
     
-    -- Cleanup Fly if disabled
-    if not flyEnabled and flyBV then
-        flyBV:Destroy()
-        flyBV = nil
+    -- Cleanup Fly
+    if not flyEnabled then
+        if flyBV then flyBV:Destroy() flyBV = nil end
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then
             Player.Character.Humanoid.PlatformStand = false
         end
+    end
+
+    -- Cleanup Noclip (Collision Fix)
+    if not noclipEnabled and not flyEnabled then
+        toggleCollisions(true) -- Force collisions ON when disabled
     end
 end
 
@@ -210,7 +222,7 @@ espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateTo
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
 
--- Main Physics Loop
+-- Physics Loop
 RunService.Heartbeat:Connect(function()
     local char = Player.Character
     if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
@@ -218,27 +230,28 @@ RunService.Heartbeat:Connect(function()
     local hum = char.Humanoid
     local root = char.HumanoidRootPart
 
-    -- Noclip
+    -- Noclip (Active)
     if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+        for _, part in pairs(char:GetDescendants()) do 
+            if part:IsA("BasePart") then part.CanCollide = false end 
+        end
     end
 
-    -- Fly Logic (Fixed Floating)
+    -- Fly Logic
     if flyEnabled then
-        hum.PlatformStand = true -- Disable physics falling
+        hum.PlatformStand = true
         
-        -- Create BodyVelocity if missing
         if not flyBV or flyBV.Parent ~= root then
             flyBV = Instance.new("BodyVelocity")
+            flyBV.Name = "FlyVelocity"
             flyBV.Parent = root
-            flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            -- FIX: Infinite Force prevents falling
+            flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge) 
         end
         
-        -- Calculate movement
         local flyDir = hum.MoveDirection
         local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
         
-        -- Apply velocity directly to BodyVelocity (Stops falling)
         flyBV.Velocity = (flyDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
     else
         -- WalkSpeed Logic
@@ -253,7 +266,6 @@ applyBtn.MouseButton1Click:Connect(function()
     flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
 end)
 
--- UI Interaction
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen if pDropOpen then updatePlayerList() end end)
 lDropTitle.MouseButton1Click:Connect(function() lDropOpen = not lDropOpen lScroll.Visible = lDropOpen end)
 
