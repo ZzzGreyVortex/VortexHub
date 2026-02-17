@@ -23,7 +23,7 @@ local pDropOpen = false
 local lDropOpen = false
 local flyBV = nil
 
--- UI Setup
+-- UI Setup (Horizontal)
 local screenGui = Instance.new("ScreenGui", TargetGUI)
 screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
@@ -120,22 +120,13 @@ lScroll.Visible = false
 lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- ESP Logic (Now with Auto-Refresh)
-local function applyESP(char)
-    if not char then return end
-    local hl = char:FindFirstChild("VortexESP")
-    if espEnabled then
-        if not hl then
-            hl = Instance.new("Highlight")
-            hl.Name = "VortexESP"
-            hl.FillTransparency = 0.5
-            hl.OutlineTransparency = 0
-            hl.FillColor = Color3.fromRGB(255, 0, 0)
-            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-            hl.Parent = char
+-- ESP Cleanup Logic (FIXES FLASHING)
+local function clearESP()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character then
+            local hl = p.Character:FindFirstChild("VortexESP")
+            if hl then hl:Destroy() end
         end
-    elseif hl then
-        hl:Destroy()
     end
 end
 
@@ -156,9 +147,23 @@ task.spawn(function()
             end
             pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
         end
-        -- Force ESP Refresh on all players
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then applyESP(p.Character) end
+        
+        -- ESP Refresh
+        if espEnabled then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character then
+                    local hl = p.Character:FindFirstChild("VortexESP")
+                    if not hl then
+                        hl = Instance.new("Highlight")
+                        hl.Name = "VortexESP"
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.FillColor = Color3.fromRGB(255, 0, 0)
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        hl.Parent = p.Character
+                    end
+                end
+            end
         end
     end
 end)
@@ -188,8 +193,11 @@ end
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    if not espEnabled then clearESP() end -- Immediate cleanup
+    
     flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
     flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    
     noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
     
@@ -197,6 +205,7 @@ local function updateToggles()
         if flyBV then flyBV:Destroy() flyBV = nil end
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then Player.Character.Humanoid.PlatformStand = false end
     end
+    
     if not noclipEnabled and not flyEnabled then
         if Player.Character then
             for _, part in pairs(Player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = true end end
@@ -208,12 +217,15 @@ espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateTo
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
 
--- Main Physics
+-- Core Physics & WalkSpeed Fix
 RunService.Stepped:Connect(function()
     local char = Player.Character
-    if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+    if not (char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid")) then return end
     local root = char.HumanoidRootPart
     local hum = char.Humanoid
+
+    -- WalkSpeed Fix: Constant application
+    hum.WalkSpeed = walkSpeedValue
 
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
@@ -228,13 +240,13 @@ RunService.Stepped:Connect(function()
         local moveDir = hum.MoveDirection
         local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
         flyBV.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
-        root.Velocity = Vector3.new(0,0,0) -- Anti-Fall Lock
+        root.Velocity = Vector3.new(0,0,0) 
     end
 end)
 
 applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or walkSpeedValue
-    flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+    flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
