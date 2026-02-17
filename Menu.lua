@@ -116,7 +116,6 @@ pScroll.Size = UDim2.new(0.9, 0, 0, 80)
 pScroll.Position = UDim2.new(0.05, 0, 0.52, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 pScroll.Visible = false
-pScroll.CanvasSize = UDim2.new(0,0,0,0)
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
 -- LOCATION DROPDOWN
@@ -127,10 +126,9 @@ lScroll.Size = UDim2.new(0.9, 0, 0, 100)
 lScroll.Position = UDim2.new(0.05, 0, 0.80, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
-lScroll.CanvasSize = UDim2.new(0,0,0,0)
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- LOGIC: Update Players
+-- Logic: Players
 local function updatePlayerList()
     for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
@@ -147,22 +145,27 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- LOGIC: Update Locations
+-- Logic: Locations (Fixed Scanner)
 local function updateLocList()
     for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     
-    -- Scan Workspace
+    local added = {} -- Prevent duplicate names
+
+    -- Scan for Spawns, Checkpoints, and Teleports
     for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("SpawnLocation") or (obj:IsA("BasePart") and (obj.Name:lower():find("teleport") or obj.Name:lower():find("goal"))) then
-            local btn = createBtn(obj.Name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
-            btn.Size = UDim2.new(1, 0, 0, 25)
-            btn.MouseButton1Click:Connect(function()
-                Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 5, 0))
-            end)
+        if obj:IsA("SpawnLocation") or obj.Name:lower():find("checkpoint") or obj.Name:lower():find("teleport") then
+            if obj:IsA("BasePart") and not added[obj.Name] then
+                added[obj.Name] = true
+                local btn = createBtn(obj.Name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
+                btn.Size = UDim2.new(1, 0, 0, 25)
+                btn.MouseButton1Click:Connect(function()
+                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 5, 0))
+                end)
+            end
         end
     end
     
-    -- Add Custom
+    -- Add Custom Saves
     for name, pos in pairs(CustomLocations) do
         local btn = createBtn("[Saved] " .. name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(255, 200, 0), lScroll)
         btn.Size = UDim2.new(1, 0, 0, 25)
@@ -173,17 +176,18 @@ local function updateLocList()
     lScroll.CanvasSize = UDim2.new(0, 0, 0, #lScroll:GetChildren() * 27)
 end
 
--- Event Listeners
+-- Events
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
 savePosBtn.MouseButton1Click:Connect(function()
-    local pos = Player.Character.HumanoidRootPart.Position
-    local name = "Loc " .. (#lScroll:GetChildren() + 1)
-    CustomLocations[name] = pos
-    if lDropOpen then updateLocList() end
+    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        local name = "Loc " .. (#CustomLocations + 1)
+        CustomLocations[name] = Player.Character.HumanoidRootPart.Position
+        if lDropOpen then updateLocList() end
+    end
 end)
 
 pDropTitle.MouseButton1Click:Connect(function()
@@ -201,32 +205,28 @@ end)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
--- ESP, Fly, and Physics Loops
+-- Physics Loop
 local bv = Instance.new("BodyVelocity")
 RunService.Stepped:Connect(function()
     local char = Player.Character
-    if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
-    local hum, root = char.Humanoid, char.HumanoidRootPart
-
+    if not char or not char:FindFirstChild("Humanoid") or not char:FindFirstChild("HumanoidRootPart") then return end
+    
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     end
 
     if not flyEnabled then
-        hum.WalkSpeed = walkSpeedValue
-        hum.PlatformStand = false
+        char.Humanoid.WalkSpeed = walkSpeedValue
         bv.Parent = nil
     else
-        hum.PlatformStand = true
-        bv.Parent = root
+        bv.Parent = char.HumanoidRootPart
         bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        local moveDir = hum.MoveDirection
         local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        bv.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+        bv.Velocity = (char.Humanoid.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
     end
 end)
 
--- Buttons for Toggles
+-- Toggles
 espBtn.MouseButton1Click:Connect(function()
     espEnabled = not espEnabled
     espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
@@ -243,22 +243,4 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled
     noclipBtn.Text = noclipEnabled and "Noclip: ON" or "Noclip: OFF"
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end)
-
--- ESP Loop
-task.spawn(function()
-    while task.wait(0.5) do
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local hl = p.Character:FindFirstChild("VortexESP")
-                if espEnabled then
-                    if not hl then 
-                        hl = Instance.new("Highlight", p.Character) 
-                        hl.Name = "VortexESP" 
-                        hl.FillColor = Color3.fromRGB(255, 0, 0) 
-                    end
-                elseif hl then hl:Destroy() end
-            end
-        end
-    end
 end)
