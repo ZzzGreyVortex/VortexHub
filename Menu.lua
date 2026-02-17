@@ -105,8 +105,8 @@ local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.13, 0), Color3.fromRGB
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
 
 -- Speed Inputs
-local walkInput = createInput("Walk Speed ("..walkSpeedValue..")", UDim2.new(0.05, 0, 0.26, 0))
-local flyInput = createInput("Fly Speed ("..flySpeedValue..")", UDim2.new(0.05, 0, 0.32, 0))
+local walkInput = createInput("Walk Speed...", UDim2.new(0.05, 0, 0.26, 0))
+local flyInput = createInput("Fly Speed...", UDim2.new(0.05, 0, 0.32, 0))
 local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
 -- PLAYER DROPDOWN
@@ -145,23 +145,26 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- Update Locations (Deep Scan)
+-- Update Locations (Duplicate Filter Added)
 local function updateLocList()
     for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     
-    local addedPositions = {}
+    local addedNames = {} -- Logic to prevent duplicate names
     local keywords = {"shop", "store", "teleport", "spawn", "checkpoint", "npc", "zone", "area", "sell", "quest"}
 
     local function checkAndAdd(obj)
-        local name = obj.Name:lower()
+        local name = obj.Name
+        local lowerName = name:lower()
+        
+        -- Filter keywords
         local isMatch = false
-        for _, word in ipairs(keywords) do if name:find(word) then isMatch = true break end end
+        for _, word in ipairs(keywords) do if lowerName:find(word) then isMatch = true break end end
         
         if (obj:IsA("SpawnLocation") or isMatch) and obj:IsA("BasePart") then
-            -- Check for duplicates (if multiple parts are in the same spot)
-            if not addedPositions[obj.Position] then
-                addedPositions[obj.Position] = true
-                local btn = createBtn(obj.Name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
+            -- ONLY add if we haven't seen this name yet
+            if not addedNames[name] then
+                addedNames[name] = true
+                local btn = createBtn(name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
                 btn.Size = UDim2.new(1, 0, 0, 25)
                 btn.MouseButton1Click:Connect(function()
                     Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0))
@@ -170,7 +173,6 @@ local function updateLocList()
         end
     end
 
-    -- Scans Workspace models and parts
     for _, obj in pairs(game.Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then
             checkAndAdd(obj)
@@ -179,7 +181,6 @@ local function updateLocList()
         end
     end
     
-    -- Custom Saves
     for name, pos in pairs(CustomLocations) do
         local btn = createBtn("[Saved] " .. name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(255, 200, 0), lScroll)
         btn.Size = UDim2.new(1, 0, 0, 25)
@@ -190,15 +191,23 @@ local function updateLocList()
     lScroll.CanvasSize = UDim2.new(0, 0, 0, #lScroll:GetChildren() * 27)
 end
 
--- Button Events
+-- Apply Speeds Logic (FIXED)
 applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-    flySpeedValue = tonumber(flyInput.Text) or 20
+    local newWalk = tonumber(walkInput.Text)
+    local newFly = tonumber(flyInput.Text)
+    
+    if newWalk then walkSpeedValue = newWalk end
+    if newFly then flySpeedValue = newFly end
+    
+    -- Immediate Feedback
+    applyBtn.Text = "Applied!"
+    task.wait(1)
+    applyBtn.Text = "Apply Speeds"
 end)
 
 savePosBtn.MouseButton1Click:Connect(function()
     if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        local name = "Loc " .. (#CustomLocations + 1)
+        local name = "Loc " .. (os.date("%X")) -- Uses timestamp for unique custom saves
         CustomLocations[name] = Player.Character.HumanoidRootPart.Position
         if lDropOpen then updateLocList() end
     end
@@ -219,28 +228,34 @@ end)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
--- Loop
+-- Main Physics Loop
 local bv = Instance.new("BodyVelocity")
 RunService.Stepped:Connect(function()
     local char = Player.Character
     if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
     
+    local hum = char.Humanoid
+    local root = char.HumanoidRootPart
+
+    -- Noclip/Fly collision off
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     end
 
     if not flyEnabled then
-        char.Humanoid.WalkSpeed = walkSpeedValue
+        hum.WalkSpeed = walkSpeedValue
+        hum.PlatformStand = false
         bv.Parent = nil
     else
-        bv.Parent = char.HumanoidRootPart
+        hum.PlatformStand = true
+        bv.Parent = root
         bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
         local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        bv.Velocity = (char.Humanoid.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+        bv.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
     end
 end)
 
--- Toggles
+-- Buttons
 espBtn.MouseButton1Click:Connect(function()
     espEnabled = not espEnabled
     espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
