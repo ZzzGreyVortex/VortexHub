@@ -11,17 +11,13 @@ local function getSafeUI()
 end
 
 local TargetGUI = getSafeUI()
-
-if TargetGUI:FindFirstChild("VortexMenu") then 
-    TargetGUI.VortexMenu:Destroy() 
-end
+if TargetGUI:FindFirstChild("VortexMenu") then TargetGUI.VortexMenu:Destroy() end
 
 -- State Variables
-local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
 local walkSpeedValue = 16
-local flySpeedValue = 10 -- Started very low to prevent flinging
+local flySpeedValue = 5 -- Defaulted to a very slow "crawl" speed
 
 -- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
@@ -31,11 +27,11 @@ screenGui.ResetOnSpawn = false
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0, 200, 0, 320)
 mainFrame.Position = UDim2.new(0.1, 0, 0.5, -160)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 
--- Dragging Logic
+-- Modern Dragging
 local dragging, dragInput, dragStart, startPos
 mainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true dragStart = input.Position startPos = mainFrame.Position end
@@ -54,35 +50,33 @@ local function createBtn(text, pos, color)
     btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = pos
     btn.Text = text
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
     Instance.new("UICorner", btn)
     return btn
 end
 
-local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.05, 0), Color3.fromRGB(0, 255, 120))
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.18, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.31, 0), Color3.fromRGB(255, 60, 60))
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.05, 0), Color3.fromRGB(255, 60, 60))
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.18, 0), Color3.fromRGB(255, 60, 60))
 
 local flyInput = Instance.new("TextBox", mainFrame)
 flyInput.Size = UDim2.new(0.9, 0, 0, 35)
-flyInput.Position = UDim2.new(0.05, 0, 0.48, 0)
-flyInput.PlaceholderText = "Fly Speed (Try 10)..."
-flyInput.Text = "10"
-flyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+flyInput.Position = UDim2.new(0.05, 0, 0.35, 0)
+flyInput.PlaceholderText = "Fly Speed (Set to 5)..."
+flyInput.Text = "5"
+flyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 flyInput.TextColor3 = Color3.new(1, 1, 1)
 Instance.new("UICorner", flyInput)
 
 local walkInput = flyInput:Clone()
 walkInput.Parent = mainFrame
-walkInput.Position = UDim2.new(0.05, 0, 0.62, 0)
-walkInput.PlaceholderText = "Walk Speed..."
+walkInput.Position = UDim2.new(0.05, 0, 0.50, 0)
 walkInput.Text = "16"
 
-local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.80, 0), Color3.new(1, 1, 1))
+local applyBtn = createBtn("Apply Speed", UDim2.new(0.05, 0, 0.70, 0), Color3.new(1, 1, 1))
 
--- Logic Connections
+-- Logic
 flyBtn.MouseButton1Click:Connect(function()
     flyEnabled = not flyEnabled
     flyBtn.Text = flyEnabled and "Fly: ON" or "Fly: OFF"
@@ -96,11 +90,11 @@ noclipBtn.MouseButton1Click:Connect(function()
 end)
 
 applyBtn.MouseButton1Click:Connect(function()
-    flySpeedValue = tonumber(flyInput.Text) or 10
+    flySpeedValue = tonumber(flyInput.Text) or 5
     walkSpeedValue = tonumber(walkInput.Text) or 16
 end)
 
--- Main Loop
+-- Main Stabilizer Loop
 RunService.Stepped:Connect(function(dt)
     local char = Player.Character
     if not char then return end
@@ -108,7 +102,7 @@ RunService.Stepped:Connect(function(dt)
     local root = char:FindFirstChild("HumanoidRootPart")
     if not hum or not root then return end
 
-    -- Noclip (Always on for Fly to prevent flinging)
+    -- Forces character parts to ignore collision (Crucial to prevent flings)
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
@@ -120,17 +114,19 @@ RunService.Stepped:Connect(function(dt)
         hum.PlatformStand = false
     else
         hum.PlatformStand = true
-        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        -- Anchors the velocity so the character doesn't drift or fling
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
         
         local moveDir = hum.MoveDirection
         local upDir = 0
         
-        -- Controls: Space = Up, Q = Down (Shift removed)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 end
         if UserInputService:IsKeyDown(Enum.KeyCode.Q) then upDir = -1 end
         
-        -- Apply position change
-        local targetPos = (moveDir * flySpeedValue * dt) + Vector3.new(0, upDir * flySpeedValue * dt, 0)
-        root.CFrame = root.CFrame + targetPos
+        -- Movement is multiplied by a small constant to keep it precise
+        local targetCFrame = root.CFrame + (moveDir * flySpeedValue * dt * 5) + Vector3.new(0, upDir * flySpeedValue * dt * 5, 0)
+        root.CFrame = targetCFrame
     end
 end)
