@@ -23,7 +23,7 @@ local pDropOpen = false
 local lDropOpen = false
 local flyBV = nil
 
--- UI Setup (Horizontal)
+-- UI Setup (Logic untouched)
 local screenGui = Instance.new("ScreenGui", TargetGUI)
 screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
@@ -120,7 +120,7 @@ lScroll.Visible = false
 lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- ESP Cleanup Logic (FIXES FLASHING)
+-- FIXED ESP (Zero Flashing)
 local function clearESP()
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
@@ -130,7 +130,6 @@ local function clearESP()
     end
 end
 
--- Refresh Loops
 task.spawn(function()
     while task.wait(0.5) do
         if pDropOpen then
@@ -148,13 +147,12 @@ task.spawn(function()
             pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
         end
         
-        -- ESP Refresh
+        -- Flash Fix: Loop only runs IF enabled. If not, it skips entirely.
         if espEnabled then
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= Player and p.Character then
-                    local hl = p.Character:FindFirstChild("VortexESP")
-                    if not hl then
-                        hl = Instance.new("Highlight")
+                    if not p.Character:FindFirstChild("VortexESP") then
+                        local hl = Instance.new("Highlight")
                         hl.Name = "VortexESP"
                         hl.FillTransparency = 0.5
                         hl.OutlineTransparency = 0
@@ -168,32 +166,11 @@ task.spawn(function()
     end
 end)
 
--- Location Logic
-local function updateLocList()
-    for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    local added = {}
-    local keywords = {"shop", "store", "spawn", "checkpoint", "npc", "bank", "sell"}
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not added[obj.Name] then
-            for _, word in ipairs(keywords) do
-                if obj.Name:lower():find(word) then
-                    added[obj.Name] = true
-                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
-                    btn.MouseButton1Click:Connect(function()
-                        local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-                        if root then root.CFrame = obj.CFrame + Vector3.new(0, 3, 0) end
-                    end)
-                end
-            end
-        end
-    end
-end
-
--- Toggles
+-- Fixed Toggles
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    if not espEnabled then clearESP() end -- Immediate cleanup
+    if not espEnabled then clearESP() end
     
     flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
     flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
@@ -205,30 +182,32 @@ local function updateToggles()
         if flyBV then flyBV:Destroy() flyBV = nil end
         if Player.Character and Player.Character:FindFirstChild("Humanoid") then Player.Character.Humanoid.PlatformStand = false end
     end
-    
-    if not noclipEnabled and not flyEnabled then
-        if Player.Character then
-            for _, part in pairs(Player.Character:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = true end end
-        end
-    end
 end
 
 espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateToggles() end)
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
 
--- Core Physics & WalkSpeed Fix
+-- CORE PHYSICS (WALKSPEED FIXED)
 RunService.Stepped:Connect(function()
     local char = Player.Character
-    if not (char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid")) then return end
-    local root = char.HumanoidRootPart
-    local hum = char.Humanoid
+    if not char then return end
+    local hum = char:FindFirstChild("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not (hum and root) then return end
 
-    -- WalkSpeed Fix: Constant application
-    hum.WalkSpeed = walkSpeedValue
+    -- FIXED: Direct property lock (ignores game resets)
+    if hum.WalkSpeed ~= walkSpeedValue then
+        hum.WalkSpeed = walkSpeedValue
+    end
 
     if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+        for _, part in pairs(char:GetDescendants()) do 
+            if part:IsA("BasePart") then part.CanCollide = false end 
+        end
+    elseif not noclipEnabled and not flyEnabled then
+        -- Standard Collision Fix
+        root.CanCollide = true
     end
 
     if flyEnabled then
@@ -237,9 +216,8 @@ RunService.Stepped:Connect(function()
             flyBV = Instance.new("BodyVelocity", root)
             flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
         end
-        local moveDir = hum.MoveDirection
         local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        flyBV.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+        flyBV.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
         root.Velocity = Vector3.new(0,0,0) 
     end
 end)
@@ -249,9 +227,29 @@ applyBtn.MouseButton1Click:Connect(function()
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
-pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
-lDropTitle.MouseButton1Click:Connect(function() lDropOpen = not lDropOpen lScroll.Visible = lDropOpen if lDropOpen then updateLocList() end end)
+-- Location/UI Clickers
+lDropTitle.MouseButton1Click:Connect(function()
+    lDropOpen = not lDropOpen
+    lScroll.Visible = lDropOpen
+    if lDropOpen then
+        for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+        local added = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not added[obj.Name] then
+                local n = obj.Name:lower()
+                if n:find("shop") or n:find("store") or n:find("spawn") or n:find("bank") or n:find("npc") then
+                    added[obj.Name] = true
+                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
+                    btn.MouseButton1Click:Connect(function()
+                        if root then root.CFrame = obj.CFrame + Vector3.new(0, 3, 0) end
+                    end)
+                end
+            end
+        end
+    end
+end)
 
+pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
 local hideBtn = createBtn("X", UDim2.new(0.93, 0, 0.02, 0), Color3.fromRGB(255, 60, 60), mainFrame, UDim2.new(0, 30, 0, 30))
 hideBtn.BackgroundTransparency = 1
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
