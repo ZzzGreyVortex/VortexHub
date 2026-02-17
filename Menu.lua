@@ -23,7 +23,7 @@ local pDropOpen = false
 local lDropOpen = false
 local flyBV = nil
 
--- UI Setup (Logic untouched)
+-- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
 screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
@@ -120,7 +120,7 @@ lScroll.Visible = false
 lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- FIXED ESP (Zero Flashing)
+-- ESP Logic
 local function clearESP()
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
@@ -147,7 +147,6 @@ task.spawn(function()
             pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
         end
         
-        -- Flash Fix: Loop only runs IF enabled. If not, it skips entirely.
         if espEnabled then
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= Player and p.Character then
@@ -166,7 +165,7 @@ task.spawn(function()
     end
 end)
 
--- Fixed Toggles
+-- Toggles
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
@@ -188,7 +187,7 @@ espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateTo
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
 
--- CORE PHYSICS (WALKSPEED FIXED)
+-- Core Physics
 RunService.Stepped:Connect(function()
     local char = Player.Character
     if not char then return end
@@ -196,7 +195,6 @@ RunService.Stepped:Connect(function()
     local root = char:FindFirstChild("HumanoidRootPart")
     if not (hum and root) then return end
 
-    -- FIXED: Direct property lock (ignores game resets)
     if hum.WalkSpeed ~= walkSpeedValue then
         hum.WalkSpeed = walkSpeedValue
     end
@@ -206,7 +204,6 @@ RunService.Stepped:Connect(function()
             if part:IsA("BasePart") then part.CanCollide = false end 
         end
     elseif not noclipEnabled and not flyEnabled then
-        -- Standard Collision Fix
         root.CanCollide = true
     end
 
@@ -227,7 +224,7 @@ applyBtn.MouseButton1Click:Connect(function()
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
--- Location/UI Clickers
+-- Location Logic (FIXED TELEPORT)
 lDropTitle.MouseButton1Click:Connect(function()
     lDropOpen = not lDropOpen
     lScroll.Visible = lDropOpen
@@ -241,7 +238,11 @@ lDropTitle.MouseButton1Click:Connect(function()
                     added[obj.Name] = true
                     local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
                     btn.MouseButton1Click:Connect(function()
-                        if root then root.CFrame = obj.CFrame + Vector3.new(0, 3, 0) end
+                        local myChar = Player.Character
+                        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                        if myRoot then 
+                            myRoot.CFrame = obj.CFrame + Vector3.new(0, 3, 0) 
+                        end
                     end)
                 end
             end
