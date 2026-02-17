@@ -3,8 +3,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
-local CustomLocations = {}
-
 local function getSafeUI()
     local success, result = pcall(function()
         return gethui and gethui() or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -23,6 +21,7 @@ local walkSpeedValue = 16
 local flySpeedValue = 20
 local pDropOpen = false
 local lDropOpen = false
+local flyBV = nil
 
 -- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
@@ -45,7 +44,37 @@ openBtn.Text = "V"
 openBtn.Font = Enum.Font.GothamBold
 openBtn.TextSize = 25
 openBtn.Visible = false
+openBtn.Active = true
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
+
+-- Draggable Logic
+local function makeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    local function update(input)
+        local delta = input.Position - dragStart
+        gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then update(input) end
+    end)
+end
+makeDraggable(mainFrame)
+makeDraggable(openBtn)
 
 -- Helpers
 local function createBtn(text, pos, color, parent)
@@ -74,7 +103,7 @@ local function createInput(placeholder, pos)
     return box
 end
 
--- Toggles with Visual Fixes
+-- Toggles
 local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.07, 0), Color3.fromRGB(0, 255, 120))
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.13, 0), Color3.fromRGB(255, 60, 60))
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
@@ -83,23 +112,26 @@ local walkInput = createInput("Walk Speed...", UDim2.new(0.05, 0, 0.26, 0))
 local flyInput = createInput("Fly Speed...", UDim2.new(0.05, 0, 0.32, 0))
 local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
+-- Player List
 local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.46, 0), Color3.new(1,1,1))
 local pScroll = Instance.new("ScrollingFrame", mainFrame)
 pScroll.Size = UDim2.new(0.9, 0, 0, 80)
 pScroll.Position = UDim2.new(0.05, 0, 0.52, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 pScroll.Visible = false
+pScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
+-- Location List
 local lDropTitle = createBtn("Game Locations ▽", UDim2.new(0.05, 0, 0.68, 0), Color3.new(1,1,1))
 local lScroll = Instance.new("ScrollingFrame", mainFrame)
 lScroll.Size = UDim2.new(0.9, 0, 0, 100)
 lScroll.Position = UDim2.new(0.05, 0, 0.74, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
+lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Function: Refresh Player List
 local function updatePlayerList()
     for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
@@ -118,13 +150,11 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- Refresh Loops (ESP & Player List)
+-- Outline ESP & Refresh Logic
 task.spawn(function()
-    while task.wait(1) do
-        -- Constantly update player list if dropdown is open
+    while task.wait(0.5) do
         if pDropOpen then updatePlayerList() end
         
-        -- ESP Logic
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= Player and p.Character then
                 local hl = p.Character:FindFirstChild("VortexESP")
@@ -132,9 +162,11 @@ task.spawn(function()
                     if not hl then
                         hl = Instance.new("Highlight")
                         hl.Name = "VortexESP"
-                        hl.FillColor = Color3.new(1, 0, 0)
-                        hl.FillTransparency = 0.5
                         hl.Parent = p.Character
+                        hl.FillTransparency = 0.5
+                        hl.OutlineTransparency = 0
+                        hl.FillColor = Color3.fromRGB(255, 0, 0)
+                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
                     end
                 elseif hl then
                     hl:Destroy()
@@ -144,23 +176,45 @@ task.spawn(function()
     end
 end)
 
--- Button Toggle Logic (Visuals)
+-- Collision & State Management
+local function setCollisions(enabled)
+    local char = Player.Character
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = enabled
+            end
+        end
+    end
+end
+
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-
+    
     flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
     flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-
+    
     noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    
+    if not flyEnabled then
+        if flyBV then flyBV:Destroy() flyBV = nil end
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            Player.Character.Humanoid.PlatformStand = false
+        end
+    end
+
+    if not noclipEnabled and not flyEnabled then
+        setCollisions(true)
+    end
 end
 
 espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateToggles() end)
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
 
--- Physics
+-- Main Physics Heartbeat
 RunService.Heartbeat:Connect(function()
     local char = Player.Character
     if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
@@ -169,31 +223,38 @@ RunService.Heartbeat:Connect(function()
     local root = char.HumanoidRootPart
 
     if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+        for _, part in pairs(char:GetDescendants()) do 
+            if part:IsA("BasePart") then part.CanCollide = false end 
+        end
     end
 
-    if not flyEnabled then
-        if hum.MoveDirection.Magnitude > 0 then
+    if flyEnabled then
+        hum.PlatformStand = true
+        if not flyBV or flyBV.Parent ~= root then
+            flyBV = Instance.new("BodyVelocity")
+            flyBV.Name = "VortexFly"
+            flyBV.Parent = root
+            flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge) 
+        end
+        
+        local moveDir = hum.MoveDirection
+        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
+        flyBV.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+    else
+        if hum.MoveDirection.Magnitude > 0 and walkSpeedValue > 16 then
             root.CFrame = root.CFrame + (hum.MoveDirection * (walkSpeedValue / 50))
         end
-    else
-        hum.PlatformStand = true
-        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        root.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
     end
 end)
 
--- Apply Speeds
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or walkSpeedValue
     flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
 end)
 
--- Dropdowns
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen if pDropOpen then updatePlayerList() end end)
 lDropTitle.MouseButton1Click:Connect(function() lDropOpen = not lDropOpen lScroll.Visible = lDropOpen end)
 
--- UI Visibility
 local hideBtn_Main = createBtn("X", UDim2.new(0.8, 0, 0.01, 0), Color3.fromRGB(255, 60, 60))
 hideBtn_Main.BackgroundTransparency = 1
 hideBtn_Main.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
