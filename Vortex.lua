@@ -21,97 +21,68 @@ local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
 local walkSpeedValue = 16
+local flySpeedValue = 10 -- Started very low to prevent flinging
 
 -- UI Setup
-local screenGui = Instance.new("ScreenGui")
+local screenGui = Instance.new("ScreenGui", TargetGUI)
 screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = TargetGUI
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 280)
-mainFrame.Position = UDim2.new(0.1, 0, 0.5, -140)
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 200, 0, 320)
+mainFrame.Position = UDim2.new(0.1, 0, 0.5, -160)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
-mainFrame.Parent = screenGui
-
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 5)
-titleBar.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
 
 -- Dragging Logic
 local dragging, dragInput, dragStart, startPos
 mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true dragStart = input.Position startPos = mainFrame.Position end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
         local delta = input.Position - dragStart
         mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
--- Button Helper
+-- UI Components
 local function createBtn(text, pos, color)
-    local btn = Instance.new("TextButton")
+    local btn = Instance.new("TextButton", mainFrame)
     btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = pos
     btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = btn
-    btn.Parent = mainFrame
+    Instance.new("UICorner", btn)
     return btn
 end
 
--- UI Elements
-local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.08, 0), Color3.fromRGB(0, 255, 120))
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.25, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.42, 0), Color3.fromRGB(255, 60, 60))
+local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.05, 0), Color3.fromRGB(0, 255, 120))
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.18, 0), Color3.fromRGB(255, 60, 60))
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.31, 0), Color3.fromRGB(255, 60, 60))
 
--- Unified Speed Input
-local speedLabel = Instance.new("TextLabel", mainFrame)
-speedLabel.Size = UDim2.new(0.9, 0, 0, 20)
-speedLabel.Position = UDim2.new(0.05, 0, 0.60, 0)
-speedLabel.Text = "Master Speed"
-speedLabel.TextColor3 = Color3.new(1,1,1)
-speedLabel.BackgroundTransparency = 1
-speedLabel.Font = Enum.Font.Gotham
+local flyInput = Instance.new("TextBox", mainFrame)
+flyInput.Size = UDim2.new(0.9, 0, 0, 35)
+flyInput.Position = UDim2.new(0.05, 0, 0.48, 0)
+flyInput.PlaceholderText = "Fly Speed (Try 10)..."
+flyInput.Text = "10"
+flyInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+flyInput.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", flyInput)
 
-local speedInput = Instance.new("TextBox")
-speedInput.Size = UDim2.new(0.9, 0, 0, 35)
-speedInput.Position = UDim2.new(0.05, 0, 0.70, 0)
-speedInput.Text = "16"
-speedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-speedInput.TextColor3 = Color3.new(1, 1, 1)
-speedInput.Parent = mainFrame
-Instance.new("UICorner", speedInput)
+local walkInput = flyInput:Clone()
+walkInput.Parent = mainFrame
+walkInput.Position = UDim2.new(0.05, 0, 0.62, 0)
+walkInput.PlaceholderText = "Walk Speed..."
+walkInput.Text = "16"
 
--- Logic
-espBtn.MouseButton1Click:Connect(function()
-    espEnabled = not espEnabled
-    espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
-    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end)
+local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.80, 0), Color3.new(1, 1, 1))
 
+-- Logic Connections
 flyBtn.MouseButton1Click:Connect(function()
     flyEnabled = not flyEnabled
     flyBtn.Text = flyEnabled and "Fly: ON" or "Fly: OFF"
@@ -124,32 +95,12 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
 end)
 
-speedInput:GetPropertyChangedSignal("Text"):Connect(function()
-    walkSpeedValue = tonumber(speedInput.Text) or 16
+applyBtn.MouseButton1Click:Connect(function()
+    flySpeedValue = tonumber(flyInput.Text) or 10
+    walkSpeedValue = tonumber(walkInput.Text) or 16
 end)
 
--- ESP Loop
-task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= Player and p.Character then
-                    local hl = p.Character:FindFirstChild("VortexESP")
-                    if espEnabled then
-                        if not hl then
-                            hl = Instance.new("Highlight", p.Character)
-                            hl.Name = "VortexESP"
-                            hl.FillColor = Color3.fromRGB(255, 0, 0)
-                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        end
-                    elseif hl then hl:Destroy() end
-                end
-            end
-        end)
-    end
-end)
-
--- Main Stabilized Physics Loop
+-- Main Loop
 RunService.Stepped:Connect(function(dt)
     local char = Player.Character
     if not char then return end
@@ -157,7 +108,7 @@ RunService.Stepped:Connect(function(dt)
     local root = char:FindFirstChild("HumanoidRootPart")
     if not hum or not root then return end
 
-    -- Forced Noclip (Essential to prevent flinging while flying)
+    -- Noclip (Always on for Fly to prevent flinging)
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
@@ -169,22 +120,17 @@ RunService.Stepped:Connect(function(dt)
         hum.PlatformStand = false
     else
         hum.PlatformStand = true
-        -- Completely kill velocity to prevent the engine from fighting the CFrame
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         
         local moveDir = hum.MoveDirection
         local upDir = 0
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 
-        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then upDir = -1 end
         
-        -- Scaling: Speed is now exactly linked to WalkSpeed
-        -- We multiply by 1.5 to make it feel "active" but not insane
-        local scaledSpeed = walkSpeedValue * 1.5
+        -- Controls: Space = Up, Q = Down (Shift removed)
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then upDir = -1 end
         
-        local targetCFrame = root.CFrame + (moveDir * scaledSpeed * dt) + Vector3.new(0, upDir * scaledSpeed * dt, 0)
-        
-        -- Smoothly Lerp to the target position to prevent instant "snapping" which flings you
-        root.CFrame = root.CFrame:Lerp(targetCFrame, 0.5)
+        -- Apply position change
+        local targetPos = (moveDir * flySpeedValue * dt) + Vector3.new(0, upDir * flySpeedValue * dt, 0)
+        root.CFrame = root.CFrame + targetPos
     end
 end)
