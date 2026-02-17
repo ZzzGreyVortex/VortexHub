@@ -107,9 +107,9 @@ local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.f
 -- Speed Inputs
 local walkInput = createInput("Walk Speed...", UDim2.new(0.05, 0, 0.26, 0))
 local flyInput = createInput("Fly Speed...", UDim2.new(0.05, 0, 0.32, 0))
-local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
+local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
--- PLAYER DROPDOWN
+-- Dropdowns
 local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.46, 0), Color3.new(1,1,1))
 local pScroll = Instance.new("ScrollingFrame", mainFrame)
 pScroll.Size = UDim2.new(0.9, 0, 0, 80)
@@ -118,7 +118,6 @@ pScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 pScroll.Visible = false
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
--- LOCATION DROPDOWN
 local lDropTitle = createBtn("Game Locations ▽", UDim2.new(0.05, 0, 0.68, 0), Color3.new(1,1,1))
 local savePosBtn = createBtn("Save Current Pos", UDim2.new(0.05, 0, 0.74, 0), Color3.fromRGB(255, 200, 0))
 local lScroll = Instance.new("ScrollingFrame", mainFrame)
@@ -128,7 +127,7 @@ lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- LOGIC: ESP Loop (Restored)
+-- Logic: ESP
 task.spawn(function()
     while task.wait(0.5) do
         for _, p in pairs(Players:GetPlayers()) do
@@ -136,27 +135,64 @@ task.spawn(function()
                 local hl = p.Character:FindFirstChild("VortexESP")
                 if espEnabled then
                     if not hl then
-                        hl = Instance.new("Highlight")
+                        hl = Instance.new("Highlight", p.Character)
                         hl.Name = "VortexESP"
-                        hl.Parent = p.Character
                         hl.FillColor = Color3.fromRGB(255, 0, 0)
-                        hl.OutlineColor = Color3.new(1, 1, 1)
-                        hl.FillTransparency = 0.5
                     end
-                else
-                    if hl then hl:Destroy() end
-                end
+                elseif hl then hl:Destroy() end
             end
         end
     end
 end)
 
--- LOGIC: Update Players
+-- Logic: Apply Settings
+applyBtn.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or walkSpeedValue
+    flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
+    
+    -- Force update on current humanoid immediately
+    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+        Player.Character.Humanoid.WalkSpeed = walkSpeedValue
+    end
+    
+    applyBtn.Text = "Settings Updated!"
+    task.wait(0.8)
+    applyBtn.Text = "Apply Settings"
+end)
+
+-- Physics Loop (Enhanced WalkSpeed Force)
+local bv = Instance.new("BodyVelocity")
+RunService.Stepped:Connect(function()
+    local char = Player.Character
+    if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
+    
+    local hum = char.Humanoid
+    local root = char.HumanoidRootPart
+
+    if noclipEnabled or flyEnabled then
+        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+    end
+
+    if not flyEnabled then
+        -- This forces the WalkSpeed every single frame to stop the game from resetting it
+        hum.WalkSpeed = walkSpeedValue
+        hum.PlatformStand = false
+        bv.Parent = nil
+    else
+        hum.PlatformStand = true
+        bv.Parent = root
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
+        bv.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+    end
+end)
+
+-- Rest of the logic (Dropdowns, Toggles, etc.)
 local function updatePlayerList()
     for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= Player then
-            local btn = createBtn(p.DisplayName, UDim2.new(0, 0, 0, 0), Color3.new(1,1,1), pScroll)
+            local btn = createBtn(p.DisplayName, nil, Color3.new(1,1,1), pScroll)
             btn.Size = UDim2.new(1, 0, 0, 25)
             btn.MouseButton1Click:Connect(function()
                 if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -168,42 +204,27 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- LOGIC: Update Locations
 local function updateLocList()
     for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     local addedNames = {}
     local keywords = {"shop", "store", "teleport", "spawn", "checkpoint", "npc", "zone", "area", "sell", "quest"}
 
     for _, obj in pairs(game.Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") or (obj:IsA("Model") and obj.PrimaryPart) then
-            local target = obj:IsA("Model") and obj.PrimaryPart or obj
-            local name = obj.Name
+        if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not addedNames[obj.Name] then
             local match = false
-            for _, word in ipairs(keywords) do if name:lower():find(word) then match = true break end end
-            
-            if (obj:IsA("SpawnLocation") or match) and not addedNames[name] then
-                addedNames[name] = true
-                local btn = createBtn(name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
+            for _, word in ipairs(keywords) do if obj.Name:lower():find(word) then match = true break end end
+            if obj:IsA("SpawnLocation") or match then
+                addedNames[obj.Name] = true
+                local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll)
                 btn.Size = UDim2.new(1, 0, 0, 25)
                 btn.MouseButton1Click:Connect(function()
-                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(target.Position + Vector3.new(0, 3, 0))
+                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0))
                 end)
             end
         end
     end
-    lScroll.CanvasSize = UDim2.new(0, 0, 0, #lScroll:GetChildren() * 27)
 end
 
--- Apply Speeds
-applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-    flySpeedValue = tonumber(flyInput.Text) or 20
-    applyBtn.Text = "Applied!"
-    task.wait(0.5)
-    applyBtn.Text = "Apply Speeds"
-end)
-
--- Visibility Toggles
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen if pDropOpen then updatePlayerList() end end)
 lDropTitle.MouseButton1Click:Connect(function() lDropOpen = not lDropOpen lScroll.Visible = lDropOpen if lDropOpen then updateLocList() end end)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
@@ -211,31 +232,3 @@ openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Vi
 espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled espBtn.Text = "ESP: "..(espEnabled and "ON" or "OFF") espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
 flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled flyBtn.Text = "Fly: "..(flyEnabled and "ON" or "OFF") flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
 noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled noclipBtn.Text = "Noclip: "..(noclipEnabled and "ON" or "OFF") noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
-
--- Save Pos
-savePosBtn.MouseButton1Click:Connect(function()
-    local name = "Saved "..os.date("%X")
-    CustomLocations[name] = Player.Character.HumanoidRootPart.Position
-    if lDropOpen then updateLocList() end
-end)
-
--- Main Physics
-local bv = Instance.new("BodyVelocity")
-RunService.Stepped:Connect(function()
-    local char = Player.Character
-    if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
-    
-    if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
-    end
-
-    if not flyEnabled then
-        char.Humanoid.WalkSpeed = walkSpeedValue
-        bv.Parent = nil
-    else
-        bv.Parent = char.HumanoidRootPart
-        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        bv.Velocity = (char.Humanoid.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
-    end
-end)
