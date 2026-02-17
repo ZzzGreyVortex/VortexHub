@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- Better UI detection for executors
+-- Better UI detection for executors (gethui is best, CoreGui is second, PlayerGui is last)
 local function getSafeUI()
     local success, result = pcall(function()
         return gethui and gethui() or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -13,30 +13,37 @@ end
 
 local TargetGUI = getSafeUI()
 
--- Cleanup existing
+-- Cleanup existing menu
 if TargetGUI:FindFirstChild("VortexMenu") then 
     TargetGUI.VortexMenu:Destroy() 
 end
 
--- State
+-- State Variables
+local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
+local targetSpeed = 16
 local flySpeed = 50
 
--- UI Setup (Fixed Parenting)
+-- UI Setup
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = TargetGUI
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0, 180, 0, 150)
-mainFrame.Position = UDim2.new(0.1, 0, 0.5, -75)
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
+mainFrame.Position = UDim2.new(0.1, 0, 0.5, -150)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Parent = screenGui
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 5)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
 
 -- Dragging Logic
 local dragging, dragInput, dragStart, startPos
@@ -64,7 +71,7 @@ end)
 -- Button Helper
 local function createBtn(text, pos, color)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
     btn.Position = pos
     btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -80,10 +87,29 @@ local function createBtn(text, pos, color)
     return btn
 end
 
-local flyBtn = createBtn("Smooth Fly: OFF", UDim2.new(0.05, 0, 0.1, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.5, 0), Color3.fromRGB(255, 60, 60))
+local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.08, 0), Color3.fromRGB(0, 255, 120))
+local flyBtn = createBtn("Smooth Fly: OFF", UDim2.new(0.05, 0, 0.23, 0), Color3.fromRGB(255, 60, 60))
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.38, 0), Color3.fromRGB(255, 60, 60))
 
--- Toggle Events
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(0.9, 0, 0, 35)
+speedInput.Position = UDim2.new(0.05, 0, 0.58, 0)
+speedInput.PlaceholderText = "Speed..."
+speedInput.Text = "16"
+speedInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+speedInput.TextColor3 = Color3.new(1, 1, 1)
+speedInput.Font = Enum.Font.Gotham
+speedInput.Parent = mainFrame
+
+local speedBtn = createBtn("Set WalkSpeed", UDim2.new(0.05, 0, 0.75, 0), Color3.new(1, 1, 1))
+
+-- Toggle Logic
+espBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
+    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
 flyBtn.MouseButton1Click:Connect(function()
     flyEnabled = not flyEnabled
     flyBtn.Text = flyEnabled and "Smooth Fly: ON" or "Smooth Fly: OFF"
@@ -96,14 +122,45 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
 end)
 
--- Physics Loop
+speedBtn.MouseButton1Click:Connect(function()
+    targetSpeed = tonumber(speedInput.Text) or 16
+end)
+
+-- ESP Loop
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character then
+                    local hl = p.Character:FindFirstChild("VortexESP")
+                    if espEnabled then
+                        if not hl then
+                            hl = Instance.new("Highlight")
+                            hl.Name = "VortexESP"
+                            hl.FillColor = Color3.fromRGB(255, 0, 0)
+                            hl.OutlineTransparency = 0.5
+                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            hl.Parent = p.Character
+                        end
+                    elseif hl then
+                        hl:Destroy()
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Main Physics & Movement Loop
 RunService.Stepped:Connect(function(dt)
     local char = Player.Character
     if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
+    
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if not root or not hum then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
 
+    -- Noclip Logic
     if noclipEnabled then
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -112,6 +169,12 @@ RunService.Stepped:Connect(function(dt)
         end
     end
 
+    -- WalkSpeed Logic
+    if hum.WalkSpeed ~= targetSpeed then
+        hum.WalkSpeed = targetSpeed 
+    end
+    
+    -- Smooth Fly Logic (CFrame Gliding)
     if flyEnabled then
         hum.PlatformStand = true
         root.AssemblyLinearVelocity = Vector3.zero
@@ -119,11 +182,17 @@ RunService.Stepped:Connect(function(dt)
         local moveDir = hum.MoveDirection
         local upDir = 0
         
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1
-        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then upDir = -1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then 
+            upDir = 1 
+        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then 
+            upDir = -1 
+        end
         
+        -- Glides character based on DeltaTime for frame-independent smoothness
         root.CFrame = root.CFrame + (moveDir * flySpeed * dt) + Vector3.new(0, upDir * flySpeed * dt, 0)
     else
-        if hum.PlatformStand then hum.PlatformStand = false end
+        if hum.PlatformStand then
+            hum.PlatformStand = false
+        end
     end
 end)
