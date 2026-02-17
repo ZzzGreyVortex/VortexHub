@@ -18,7 +18,8 @@ local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
 local walkSpeedValue = 16
-local flySpeedValue = 20 -- BodyVelocity handles higher numbers more smoothly
+local flySpeedValue = 20
+local dropdownOpen = false
 
 -- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
@@ -26,8 +27,8 @@ screenGui.Name = "VortexMenu"
 screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 200, 0, 350)
-mainFrame.Position = UDim2.new(0.1, 0, 0.5, -175)
+mainFrame.Size = UDim2.new(0, 200, 0, 450)
+mainFrame.Position = UDim2.new(0.1, 0, 0.5, -225)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -45,40 +46,153 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 
--- UI Components
-local function createBtn(text, pos, color)
-    local btn = Instance.new("TextButton", mainFrame)
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
+-- UI Components Helper
+local function createBtn(text, pos, color, parent)
+    local btn = Instance.new("TextButton", parent or mainFrame)
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
     btn.Position = pos
     btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
     Instance.new("UICorner", btn)
     return btn
 end
 
-local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.05, 0), Color3.fromRGB(0, 255, 120))
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.17, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.29, 0), Color3.fromRGB(255, 60, 60))
+-- Toggles
+local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.03, 0), Color3.fromRGB(0, 255, 120))
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.11, 0), Color3.fromRGB(255, 60, 60))
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
 
-local flyInput = Instance.new("TextBox", mainFrame)
-flyInput.Size = UDim2.new(0.9, 0, 0, 35)
-flyInput.Position = UDim2.new(0.05, 0, 0.45, 0)
-flyInput.PlaceholderText = "Fly Speed..."
-flyInput.Text = "20"
-flyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-flyInput.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", flyInput)
+-- Speed Inputs
+local function createInput(placeholder, pos)
+    local box = Instance.new("TextBox", mainFrame)
+    box.Size = UDim2.new(0.9, 0, 0, 30)
+    box.Position = pos
+    box.PlaceholderText = placeholder
+    box.Text = ""
+    box.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    box.TextColor3 = Color3.new(1, 1, 1)
+    box.Font = Enum.Font.Gotham
+    Instance.new("UICorner", box)
+    return box
+end
 
-local walkInput = flyInput:Clone()
-walkInput.Parent = mainFrame
-walkInput.Position = UDim2.new(0.05, 0, 0.58, 0)
-walkInput.Text = "16"
+local walkInput = createInput("Walk Speed (16)...", UDim2.new(0.05, 0, 0.28, 0))
+local flyInput = createInput("Fly Speed (20)...", UDim2.new(0.05, 0, 0.36, 0))
+local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.44, 0), Color3.new(1,1,1))
 
-local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.80, 0), Color3.new(1, 1, 1))
+-- Dropdown
+local dropdownFrame = Instance.new("Frame", mainFrame)
+dropdownFrame.Size = UDim2.new(0.9, 0, 0, 30)
+dropdownFrame.Position = UDim2.new(0.05, 0, 0.53, 0)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Instance.new("UICorner", dropdownFrame)
 
--- Logic
+local dropdownTitle = Instance.new("TextButton", dropdownFrame)
+dropdownTitle.Size = UDim2.new(1, 0, 1, 0)
+dropdownTitle.BackgroundTransparency = 1
+dropdownTitle.Text = "Select Player ▽"
+dropdownTitle.TextColor3 = Color3.new(1, 1, 1)
+dropdownTitle.Font = Enum.Font.GothamBold
+
+local playerScroll = Instance.new("ScrollingFrame", mainFrame)
+playerScroll.Size = UDim2.new(0.9, 0, 0, 120)
+playerScroll.Position = UDim2.new(0.05, 0, 0.61, 0)
+playerScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+playerScroll.Visible = false
+playerScroll.ScrollBarThickness = 2
+Instance.new("UIListLayout", playerScroll).Padding = UDim.new(0, 5)
+
+-- Logic: Speeds
+applyBtn.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+    flySpeedValue = tonumber(flyInput.Text) or 20
+end)
+
+-- Logic: Dropdown
+local function updatePlayerList()
+    for _, child in pairs(playerScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= Player then
+            local pBtn = Instance.new("TextButton", playerScroll)
+            pBtn.Size = UDim2.new(1, -5, 0, 25)
+            pBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            pBtn.Text = p.DisplayName
+            pBtn.TextColor3 = Color3.new(1, 1, 1)
+            pBtn.Font = Enum.Font.Gotham
+            Instance.new("UICorner", pBtn)
+            pBtn.MouseButton1Click:Connect(function()
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    Player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                end
+            end)
+        end
+    end
+    playerScroll.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 30)
+end
+
+dropdownTitle.MouseButton1Click:Connect(function()
+    dropdownOpen = not dropdownOpen
+    playerScroll.Visible = dropdownOpen
+    if dropdownOpen then updatePlayerList() end
+end)
+
+-- Physics setup
+local bv = Instance.new("BodyVelocity")
+bv.Velocity = Vector3.new(0,0,0)
+bv.MaxForce = Vector3.new(0,0,0)
+
+-- Main Loop
+RunService.Stepped:Connect(function()
+    local char = Player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+
+    if noclipEnabled or flyEnabled then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+
+    if not flyEnabled then
+        hum.WalkSpeed = walkSpeedValue
+        hum.PlatformStand = false
+        bv.Parent = nil
+    else
+        hum.PlatformStand = true
+        bv.Parent = root
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        local moveDir = hum.MoveDirection
+        local upDir = 0
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then upDir = -1 end
+        bv.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, upDir * flySpeedValue, 0)
+    end
+end)
+
+-- ESP Loop
+task.spawn(function()
+    while task.wait(0.5) do
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= Player and p.Character then
+                local hl = p.Character:FindFirstChild("VortexESP")
+                if espEnabled then
+                    if not hl then
+                        hl = Instance.new("Highlight", p.Character)
+                        hl.Name = "VortexESP"
+                        hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    end
+                elseif hl then hl:Destroy() end
+            end
+        end
+    end
+end)
+
+-- Toggle Logic
 espBtn.MouseButton1Click:Connect(function()
     espEnabled = not espEnabled
     espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
@@ -95,71 +209,4 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled
     noclipBtn.Text = noclipEnabled and "Noclip: ON" or "Noclip: OFF"
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end)
-
-applyBtn.MouseButton1Click:Connect(function()
-    flySpeedValue = tonumber(flyInput.Text) or 20
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-end)
-
--- ESP Loop
-task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= Player and p.Character then
-                    local hl = p.Character:FindFirstChild("VortexESP")
-                    if espEnabled then
-                        if not hl then
-                            hl = Instance.new("Highlight", p.Character)
-                            hl.Name = "VortexESP"
-                            hl.FillColor = Color3.fromRGB(255, 0, 0)
-                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        end
-                    elseif hl then hl:Destroy() end
-                end
-            end
-        end)
-    end
-end)
-
--- Velocity Control Setup
-local bv = Instance.new("BodyVelocity")
-bv.Velocity = Vector3.new(0,0,0)
-bv.MaxForce = Vector3.new(0,0,0)
-
--- Main Loop
-RunService.Stepped:Connect(function()
-    local char = Player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not hum or not root then return end
-
-    -- Noclip
-    if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
-        end
-    end
-
-    if not flyEnabled then
-        hum.WalkSpeed = walkSpeedValue
-        hum.PlatformStand = false
-        bv.Parent = nil
-        bv.MaxForce = Vector3.new(0,0,0)
-    else
-        hum.PlatformStand = true
-        bv.Parent = root
-        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9) -- Give the force high priority
-        
-        local moveDir = hum.MoveDirection
-        local upDir = 0
-        
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then upDir = 1 end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Q) then upDir = -1 end
-        
-        -- Use velocity instead of direct CFrame to stop "Game Paused"
-        bv.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, upDir * flySpeedValue, 0)
-    end
 end)
