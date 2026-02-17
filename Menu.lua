@@ -75,7 +75,7 @@ local function createBtn(text, pos, color, parent)
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
+    btn.TextSize = 10
     btn.ClipsDescendants = true
     Instance.new("UICorner", btn)
     return btn
@@ -94,7 +94,7 @@ local function createInput(placeholder, pos)
     return box
 end
 
--- Top Controls
+-- Controls
 local hideBtn = createBtn("X", UDim2.new(0.8, 0, 0.01, 0), Color3.fromRGB(255, 60, 60))
 hideBtn.Size = UDim2.new(0, 30, 0, 30)
 hideBtn.BackgroundTransparency = 1
@@ -105,8 +105,8 @@ local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.13, 0), Color3.fromRGB
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
 
 -- Speed Inputs
-local walkInput = createInput("Walk Speed (16)...", UDim2.new(0.05, 0, 0.26, 0))
-local flyInput = createInput("Fly Speed (20)...", UDim2.new(0.05, 0, 0.32, 0))
+local walkInput = createInput("Walk Speed ("..walkSpeedValue..")", UDim2.new(0.05, 0, 0.26, 0))
+local flyInput = createInput("Fly Speed ("..flySpeedValue..")", UDim2.new(0.05, 0, 0.32, 0))
 local applyBtn = createBtn("Apply Speeds", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
 -- PLAYER DROPDOWN
@@ -128,7 +128,7 @@ lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Logic: Players
+-- Update Players
 local function updatePlayerList()
     for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     for _, p in pairs(Players:GetPlayers()) do
@@ -145,27 +145,41 @@ local function updatePlayerList()
     pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
 end
 
--- Logic: Locations (Fixed Scanner)
+-- Update Locations (Deep Scan)
 local function updateLocList()
     for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     
-    local added = {} -- Prevent duplicate names
+    local addedPositions = {}
+    local keywords = {"shop", "store", "teleport", "spawn", "checkpoint", "npc", "zone", "area", "sell", "quest"}
 
-    -- Scan for Spawns, Checkpoints, and Teleports
-    for _, obj in pairs(game:GetDescendants()) do
-        if obj:IsA("SpawnLocation") or obj.Name:lower():find("checkpoint") or obj.Name:lower():find("teleport") then
-            if obj:IsA("BasePart") and not added[obj.Name] then
-                added[obj.Name] = true
+    local function checkAndAdd(obj)
+        local name = obj.Name:lower()
+        local isMatch = false
+        for _, word in ipairs(keywords) do if name:find(word) then isMatch = true break end end
+        
+        if (obj:IsA("SpawnLocation") or isMatch) and obj:IsA("BasePart") then
+            -- Check for duplicates (if multiple parts are in the same spot)
+            if not addedPositions[obj.Position] then
+                addedPositions[obj.Position] = true
                 local btn = createBtn(obj.Name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 180, 255), lScroll)
                 btn.Size = UDim2.new(1, 0, 0, 25)
                 btn.MouseButton1Click:Connect(function()
-                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 5, 0))
+                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0))
                 end)
             end
         end
     end
+
+    -- Scans Workspace models and parts
+    for _, obj in pairs(game.Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            checkAndAdd(obj)
+        elseif obj:IsA("Model") and obj.PrimaryPart then
+            checkAndAdd(obj.PrimaryPart)
+        end
+    end
     
-    -- Add Custom Saves
+    -- Custom Saves
     for name, pos in pairs(CustomLocations) do
         local btn = createBtn("[Saved] " .. name, UDim2.new(0, 0, 0, 0), Color3.fromRGB(255, 200, 0), lScroll)
         btn.Size = UDim2.new(1, 0, 0, 25)
@@ -176,7 +190,7 @@ local function updateLocList()
     lScroll.CanvasSize = UDim2.new(0, 0, 0, #lScroll:GetChildren() * 27)
 end
 
--- Events
+-- Button Events
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
@@ -205,11 +219,11 @@ end)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
--- Physics Loop
+-- Loop
 local bv = Instance.new("BodyVelocity")
 RunService.Stepped:Connect(function()
     local char = Player.Character
-    if not char or not char:FindFirstChild("Humanoid") or not char:FindFirstChild("HumanoidRootPart") then return end
+    if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
     
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
