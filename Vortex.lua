@@ -47,7 +47,7 @@ openBtn.TextSize = 25
 openBtn.Visible = false
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
 
--- Dragging Logic
+-- Dragging logic included (Standard)
 local function makeDraggable(obj)
     local dragging, dragStart, startPos
     obj.InputBegan:Connect(function(input)
@@ -66,17 +66,15 @@ end
 makeDraggable(mainFrame)
 makeDraggable(openBtn)
 
--- UI Helpers
 local function createBtn(text, pos, color, parent)
     local btn = Instance.new("TextButton", parent or mainFrame)
     btn.Size = UDim2.new(0.9, 0, 0, 30)
-    btn.Position = pos
+    btn.Position = pos or UDim2.new(0,0,0,0)
     btn.Text = text
     btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 10
-    btn.ClipsDescendants = true
     Instance.new("UICorner", btn)
     return btn
 end
@@ -98,18 +96,15 @@ end
 local hideBtn = createBtn("X", UDim2.new(0.8, 0, 0.01, 0), Color3.fromRGB(255, 60, 60))
 hideBtn.Size = UDim2.new(0, 30, 0, 30)
 hideBtn.BackgroundTransparency = 1
-hideBtn.TextSize = 18
 
 local espBtn = createBtn("ESP: ON", UDim2.new(0.05, 0, 0.07, 0), Color3.fromRGB(0, 255, 120))
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.13, 0), Color3.fromRGB(255, 60, 60))
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.19, 0), Color3.fromRGB(255, 60, 60))
 
--- Speed Inputs
 local walkInput = createInput("Walk Speed...", UDim2.new(0.05, 0, 0.26, 0))
 local flyInput = createInput("Fly Speed...", UDim2.new(0.05, 0, 0.32, 0))
 local applyBtn = createBtn("Apply Settings", UDim2.new(0.05, 0, 0.38, 0), Color3.new(1,1,1))
 
--- Dropdowns
 local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.05, 0, 0.46, 0), Color3.new(1,1,1))
 local pScroll = Instance.new("ScrollingFrame", mainFrame)
 pScroll.Size = UDim2.new(0.9, 0, 0, 80)
@@ -119,50 +114,42 @@ pScroll.Visible = false
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
 local lDropTitle = createBtn("Game Locations ▽", UDim2.new(0.05, 0, 0.68, 0), Color3.new(1,1,1))
-local savePosBtn = createBtn("Save Current Pos", UDim2.new(0.05, 0, 0.74, 0), Color3.fromRGB(255, 200, 0))
 local lScroll = Instance.new("ScrollingFrame", mainFrame)
 lScroll.Size = UDim2.new(0.9, 0, 0, 100)
-lScroll.Position = UDim2.new(0.05, 0, 0.80, 0)
+lScroll.Position = UDim2.new(0.05, 0, 0.74, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 lScroll.Visible = false
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Logic: ESP
+-- LOGIC: Persistent ESP
 task.spawn(function()
-    while task.wait(0.5) do
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= Player and p.Character then
-                local hl = p.Character:FindFirstChild("VortexESP")
-                if espEnabled then
-                    if not hl then
-                        hl = Instance.new("Highlight", p.Character)
-                        hl.Name = "VortexESP"
-                        hl.FillColor = Color3.fromRGB(255, 0, 0)
+    while task.wait(1) do
+        if espEnabled then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    if not p.Character:FindFirstChild("VortexESP") then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Name = "VortexESP"
+                        highlight.Parent = p.Character
+                        highlight.FillColor = Color3.new(1, 0, 0)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineColor = Color3.new(1, 1, 1)
                     end
-                elseif hl then hl:Destroy() end
+                end
+            end
+        else
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.Character and p.Character:FindFirstChild("VortexESP") then
+                    p.Character.VortexESP:Destroy()
+                end
             end
         end
     end
 end)
 
--- Logic: Apply Settings
-applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or walkSpeedValue
-    flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
-    
-    -- Force update on current humanoid immediately
-    if Player.Character and Player.Character:FindFirstChild("Humanoid") then
-        Player.Character.Humanoid.WalkSpeed = walkSpeedValue
-    end
-    
-    applyBtn.Text = "Settings Updated!"
-    task.wait(0.8)
-    applyBtn.Text = "Apply Settings"
-end)
-
--- Physics Loop (Enhanced WalkSpeed Force)
+-- LOGIC: Speed & Fly (Physics Bypass)
 local bv = Instance.new("BodyVelocity")
-RunService.Stepped:Connect(function()
+RunService.Heartbeat:Connect(function(delta)
     local char = Player.Character
     if not (char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart")) then return end
     
@@ -174,10 +161,12 @@ RunService.Stepped:Connect(function()
     end
 
     if not flyEnabled then
-        -- This forces the WalkSpeed every single frame to stop the game from resetting it
-        hum.WalkSpeed = walkSpeedValue
-        hum.PlatformStand = false
         bv.Parent = nil
+        hum.PlatformStand = false
+        -- CFrame bypass for walkspeed
+        if hum.MoveDirection.Magnitude > 0 then
+            root.CFrame = root.CFrame + (hum.MoveDirection * (walkSpeedValue / 50))
+        end
     else
         hum.PlatformStand = true
         bv.Parent = root
@@ -187,48 +176,35 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Rest of the logic (Dropdowns, Toggles, etc.)
-local function updatePlayerList()
-    for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= Player then
-            local btn = createBtn(p.DisplayName, nil, Color3.new(1,1,1), pScroll)
-            btn.Size = UDim2.new(1, 0, 0, 25)
-            btn.MouseButton1Click:Connect(function()
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    Player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                end
-            end)
-        end
-    end
-    pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
-end
-
+-- LOGIC: Lists
 local function updateLocList()
     for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    local addedNames = {}
-    local keywords = {"shop", "store", "teleport", "spawn", "checkpoint", "npc", "zone", "area", "sell", "quest"}
-
+    local added = {}
+    local keywords = {"shop", "store", "teleport", "spawn", "checkpoint", "npc", "zone", "area"}
     for _, obj in pairs(game.Workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not addedNames[obj.Name] then
-            local match = false
-            for _, word in ipairs(keywords) do if obj.Name:lower():find(word) then match = true break end end
-            if obj:IsA("SpawnLocation") or match then
-                addedNames[obj.Name] = true
-                local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll)
-                btn.Size = UDim2.new(1, 0, 0, 25)
-                btn.MouseButton1Click:Connect(function()
-                    Player.Character.HumanoidRootPart.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0))
-                end)
+        if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not added[obj.Name] then
+            for _, word in ipairs(keywords) do
+                if obj.Name:lower():find(word) then
+                    added[obj.Name] = true
+                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll)
+                    btn.Size = UDim2.new(1, 0, 0, 25)
+                    btn.MouseButton1Click:Connect(function()
+                        root = Player.Character:FindFirstChild("HumanoidRootPart")
+                        if root then root.CFrame = CFrame.new(obj.Position + Vector3.new(0, 3, 0)) end
+                    end)
+                end
             end
         end
     end
 end
 
-pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen if pDropOpen then updatePlayerList() end end)
+applyBtn.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or walkSpeedValue
+    flySpeedValue = tonumber(flyInput.Text) or flySpeedValue
+end)
+
 lDropTitle.MouseButton1Click:Connect(function() lDropOpen = not lDropOpen lScroll.Visible = lDropOpen if lDropOpen then updateLocList() end end)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
-espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled espBtn.Text = "ESP: "..(espEnabled and "ON" or "OFF") espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
-flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled flyBtn.Text = "Fly: "..(flyEnabled and "ON" or "OFF") flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
-noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled noclipBtn.Text = "Noclip: "..(noclipEnabled and "ON" or "OFF") noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60) end)
+espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled end)
+flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled end)
