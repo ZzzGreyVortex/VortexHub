@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- UI Safety Check
 local function getSafeUI()
     local success, result = pcall(function()
         return (gethui and gethui()) or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -14,110 +13,134 @@ end
 local TargetGUI = getSafeUI()
 if TargetGUI:FindFirstChild("VortexHub") then TargetGUI.VortexHub:Destroy() end
 
--- Default Settings
+-- State Variables
+local espEnabled = false
+local flyEnabled = false
+local noclipEnabled = false
 local farmingAuraEnabled = false
 local antiFlipEnabled = false
-local vehicleSpeedMultiplier = 0 -- 0 is stock, start with 1 or 2
-local auraRange = 30
 local walkSpeedValue = 16
+local flySpeedValue = 50
+local vehicleBoost = 0
+local auraRange = 30
+local flyBV = nil
 
--- Main GUI Setup
+-- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
 screenGui.Name = "VortexHub"
 screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 500, 0, 320)
-mainFrame.Position = UDim2.new(0.5, -250, 0.5, -160)
-mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-mainFrame.BorderSizePixel = 0
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+mainFrame.Size = UDim2.new(0, 550, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -275, 0.5, -175)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Instance.new("UICorner", mainFrame)
 
--- Navigation Header
-local header = Instance.new("Frame", mainFrame)
-header.Size = UDim2.new(1, 0, 0, 40)
-header.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-Instance.new("UICorner", header)
+-- Navigation
+local tabContainer = Instance.new("Frame", mainFrame)
+tabContainer.Size = UDim2.new(1, 0, 0, 45)
+tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Instance.new("UICorner", tabContainer)
 
-local title = Instance.new("TextLabel", header)
-title.Size = UDim2.new(1, -40, 1, 0)
-title.Position = UDim2.new(0, 15, 0, 0)
-title.Text = "VORTEX HUB | VEHICLE FARMING"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.BackgroundTransparency = 1
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
+local combatPage = Instance.new("Frame", mainFrame)
+combatPage.Size = UDim2.new(1, 0, 1, -45)
+combatPage.Position = UDim2.new(0, 0, 0, 45)
+combatPage.BackgroundTransparency = 1
 
--- UI Components
+local farmingPage = Instance.new("Frame", mainFrame)
+farmingPage.Size = UDim2.new(1, 0, 1, -45)
+farmingPage.Position = UDim2.new(0, 0, 0, 45)
+farmingPage.BackgroundTransparency = 1
+farmingPage.Visible = false
+
+-- Tab Switching
+local function createTabBtn(name, pos, page)
+    local btn = Instance.new("TextButton", tabContainer)
+    btn.Size = UDim2.new(0, 100, 1, 0)
+    btn.Position = pos
+    btn.Text = name
+    btn.BackgroundColor3 = Color3.new(0,0,0)
+    btn.BackgroundTransparency = 1
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    btn.MouseButton1Click:Connect(function()
+        combatPage.Visible = (page == combatPage)
+        farmingPage.Visible = (page == farmingPage)
+    end)
+    return btn
+end
+
+createTabBtn("Combat", UDim2.new(0, 10, 0, 0), combatPage)
+createTabBtn("Farming", UDim2.new(0, 120, 0, 0), farmingPage)
+
+-- Helpers
 local function createBtn(text, pos, color, parent)
     local btn = Instance.new("TextButton", parent)
-    btn.Size = UDim2.new(0, 140, 0, 38)
+    btn.Size = UDim2.new(0, 150, 0, 35)
     btn.Position = pos
     btn.Text = text
-    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     btn.TextColor3 = color
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
     Instance.new("UICorner", btn)
     return btn
 end
 
 local function createInput(placeholder, pos, parent)
     local box = Instance.new("TextBox", parent)
-    box.Size = UDim2.new(0, 140, 0, 38)
+    box.Size = UDim2.new(0, 150, 0, 35)
     box.Position = pos
     box.PlaceholderText = placeholder
     box.Text = ""
     box.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     box.TextColor3 = Color3.new(1, 1, 1)
-    box.Font = Enum.Font.Gotham
     Instance.new("UICorner", box)
     return box
 end
 
--- Controls
-local auraBtn = createBtn("Aura: OFF", UDim2.new(0.05, 0, 0.2, 0), Color3.fromRGB(255, 60, 60), mainFrame)
-local flipBtn = createBtn("Anti-Flip: OFF", UDim2.new(0.05, 0, 0.38, 0), Color3.fromRGB(255, 60, 60), mainFrame)
+-- [COMBAT ELEMENTS]
+local espBtn = createBtn("ESP: OFF", UDim2.new(0.05, 0, 0.1, 0), Color3.new(1,0,0), combatPage)
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.05, 0, 0.3, 0), Color3.new(1,0,0), combatPage)
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.05, 0, 0.5, 0), Color3.new(1,0,0), combatPage)
+local walkInput = createInput("Walkspeed...", UDim2.new(0.4, 0, 0.1, 0), combatPage)
+local flyInput = createInput("Fly Speed...", UDim2.new(0.4, 0, 0.3, 0), combatPage)
 
-local rangeInput = createInput("Aura Range (30)", UDim2.new(0.38, 0, 0.2, 0), mainFrame)
-local speedInput = createInput("Speed Boost (0-5)", UDim2.new(0.38, 0, 0.38, 0), mainFrame)
-local walkInput = createInput("WalkSpeed (16)", UDim2.new(0.38, 0, 0.56, 0), mainFrame)
+-- [FARMING ELEMENTS]
+local auraBtn = createBtn("Aura: OFF", UDim2.new(0.05, 0, 0.1, 0), Color3.new(1,0,0), farmingPage)
+local flipBtn = createBtn("Anti-Flip: OFF", UDim2.new(0.05, 0, 0.3, 0), Color3.new(1,0,0), farmingPage)
+local rangeInput = createInput("Aura Range...", UDim2.new(0.4, 0, 0.1, 0), farmingPage)
+local speedInput = createInput("Vehicle Boost...", UDim2.new(0.4, 0, 0.3, 0), farmingPage)
+local applyFarming = createBtn("Apply Settings", UDim2.new(0.7, 0, 0.1, 0), Color3.new(1,1,1), farmingPage)
 
-local applyBtn = createBtn("APPLY SETTINGS", UDim2.new(0.7, 0, 0.2, 0), Color3.new(1, 1, 1), mainFrame)
-applyBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-
----
-
--- [1] THE FARMING AURA (Pure Touch Method)
--- This sends "Touch" events to the game without moving or freezing the physics.
+--- [LOGIC: FARMING AURA] ---
 task.spawn(function()
-    while task.wait(0.2) do
+    while task.wait(0.1) do
         if farmingAuraEnabled then
             local char = Player.Character
-            local hum = char and char:FindFirstChild("Humanoid")
-            local seat = hum and hum.SeatPart
-            
+            local seat = char and char:FindFirstChild("Humanoid") and char.Humanoid.SeatPart
             if seat and seat:IsA("VehicleSeat") then
                 local vehicle = seat:FindFirstAncestorOfClass("Model")
-                if not vehicle then continue end
-
-                -- Get all physical parts of the vehicle to use as "Plows"
-                local vehicleParts = {}
+                
+                -- Target the plow specifically
+                local plowParts = {}
                 for _, p in pairs(vehicle:GetDescendants()) do
-                    if p:IsA("BasePart") then table.insert(vehicleParts, p) end
+                    if p:IsA("BasePart") and (p.Name:lower():find("plow") or p.Name:lower():find("tool") or p.Name:lower():find("blade")) then
+                        table.insert(plowParts, p)
+                    end
                 end
+                if #plowParts == 0 then table.insert(plowParts, seat) end
 
-                -- Scan the workspace for farming tiles
-                for _, obj in pairs(workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") and (obj.Name:lower():find("dirt") or obj.Name:lower():find("tile") or obj.Name:lower():find("field")) then
-                        local mag = (seat.Position - obj.Position).Magnitude
-                        if mag <= auraRange then
-                            -- Tell the game every part of our tractor is touching the dirt
-                            for i = 1, #vehicleParts do
-                                firetouchinterest(obj, vehicleParts[i], 0) -- Touch began
-                                firetouchinterest(obj, vehicleParts[i], 1) -- Touch ended
-                            end
+                -- Modern, lag-free overlap check
+                local params = OverlapParams.new()
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                params.FilterDescendantsInstances = {vehicle, char}
+                
+                local parts = workspace:GetPartBoundsInRadius(seat.Position, auraRange, params)
+                for _, obj in pairs(parts) do
+                    if obj.Name:lower():find("dirt") or obj.Name:lower():find("tile") or obj.Name:lower():find("field") then
+                        for _, tool in pairs(plowParts) do
+                            firetouchinterest(obj, tool, 0)
+                            firetouchinterest(obj, tool, 1)
                         end
                     end
                 end
@@ -126,53 +149,82 @@ task.spawn(function()
     end
 end)
 
--- [2] PHYSICS & SPEED (Heartbeat for Smoothness)
-RunService.Heartbeat:Connect(function()
+--- [LOGIC: PHYSICS & COMBAT] ---
+RunService.Stepped:Connect(function()
     local char = Player.Character
-    local hum = char and char:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = walkSpeedValue end
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hum = char.Humanoid
+    local root = char.HumanoidRootPart
 
-    local seat = hum and hum.SeatPart
-    if seat and seat:IsA("VehicleSeat") then
-        -- Additive Speed (Doesn't break steering)
+    hum.WalkSpeed = walkSpeedValue
+
+    -- Vehicle Physics
+    if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
+        local seat = hum.SeatPart
         if seat.Throttle ~= 0 then
-            seat.AssemblyLinearVelocity = seat.AssemblyLinearVelocity + (seat.CFrame.LookVector * (seat.Throttle * vehicleSpeedMultiplier))
+            seat.AssemblyLinearVelocity += seat.CFrame.LookVector * (seat.Throttle * vehicleBoost)
         end
-
-        -- Anti-Flip (Only stabilizes Tilt/Roll, keeps Turning)
         if antiFlipEnabled then
-            local velocity = seat.AssemblyAngularVelocity
-            seat.AssemblyAngularVelocity = Vector3.new(0, velocity.Y, 0) -- Kill the flip rotation
-            
-            -- Gently force the tractor to stay upright
-            local _, yRot, _ = seat.CFrame:ToEulerAnglesXYZ()
-            seat.CFrame = seat.CFrame:Lerp(CFrame.new(seat.Position) * CFrame.Angles(0, yRot, 0), 0.1)
+            local x, y, z = seat.CFrame:ToEulerAnglesXYZ()
+            seat.CFrame = CFrame.new(seat.Position) * CFrame.Angles(0, y, 0)
+            seat.AssemblyAngularVelocity = Vector3.new(0, seat.AssemblyAngularVelocity.Y, 0)
         end
+    end
+
+    -- Noclip
+    if noclipEnabled or flyEnabled then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+
+    -- Fly
+    if flyEnabled then
+        hum.PlatformStand = true
+        if not flyBV then flyBV = Instance.new("BodyVelocity", root) end
+        flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        local moveDir = hum.MoveDirection
+        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
+        flyBV.Velocity = (moveDir * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+    else
+        if flyBV then flyBV:Destroy() flyBV = nil end
+        hum.PlatformStand = false
     end
 end)
 
----
-
--- Event Listeners
-applyBtn.MouseButton1Click:Connect(function()
-    auraRange = tonumber(rangeInput.Text) or 30
-    vehicleSpeedMultiplier = tonumber(speedInput.Text) or 0
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-end)
-
+-- Button Listeners
 auraBtn.MouseButton1Click:Connect(function()
     farmingAuraEnabled = not farmingAuraEnabled
     auraBtn.Text = "Aura: " .. (farmingAuraEnabled and "ON" or "OFF")
-    auraBtn.TextColor3 = farmingAuraEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    auraBtn.TextColor3 = farmingAuraEnabled and Color3.new(0,1,0) or Color3.new(1,0,0)
+end)
+
+flyBtn.MouseButton1Click:Connect(function()
+    flyEnabled = not flyEnabled
+    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
+    flyBtn.TextColor3 = flyEnabled and Color3.new(0,1,0) or Color3.new(1,0,0)
+end)
+
+noclipBtn.MouseButton1Click:Connect(function()
+    noclipEnabled = not noclipEnabled
+    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
+    noclipBtn.TextColor3 = noclipEnabled and Color3.new(0,1,0) or Color3.new(1,0,0)
 end)
 
 flipBtn.MouseButton1Click:Connect(function()
     antiFlipEnabled = not antiFlipEnabled
     flipBtn.Text = "Anti-Flip: " .. (antiFlipEnabled and "ON" or "OFF")
-    flipBtn.TextColor3 = antiFlipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    flipBtn.TextColor3 = antiFlipEnabled and Color3.new(0,1,0) or Color3.new(1,0,0)
 end)
 
--- Draggable Logic
+applyFarming.MouseButton1Click:Connect(function()
+    auraRange = tonumber(rangeInput.Text) or 30
+    vehicleBoost = tonumber(speedInput.Text) or 0
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+    flySpeedValue = tonumber(flyInput.Text) or 50
+end)
+
+-- Simple Draggable UI
 local dragging, dragInput, dragStart, startPos
 mainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
