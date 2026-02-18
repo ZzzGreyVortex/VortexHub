@@ -4,7 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
 -- State Variables
-local isScriptActive = true -- Master control for the script
+local isScriptActive = true 
 local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
@@ -37,7 +37,7 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
--- Header Tabs
+-- Header Container (Always Visible)
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 45)
 tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -99,11 +99,52 @@ local function createTabBtn(name, pos)
     return btn
 end
 
--- Elements
+-- Kill Switch Function
+local function terminateScript()
+    isScriptActive = false
+    espEnabled = false
+    flyEnabled = false
+    noclipEnabled = false
+    
+    -- Reset ESP
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character then
+            local hl = p.Character:FindFirstChild("VortexESP")
+            if hl then hl:Destroy() end
+        end
+    end
+    
+    local char = Player.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if hum then 
+            hum.WalkSpeed = 16 
+            hum.PlatformStand = false
+        end
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
+    end
+    
+    if flyBV then flyBV:Destroy() end
+    screenGui:Destroy()
+end
+
+-- PERMANENT BUTTONS (Placed in tabContainer so they never hide)
 local combatTabBtn = createTabBtn("Combat", UDim2.new(0, 10, 0, 0))
-local farmingTabBtn = createTabBtn("Farming", UDim2.new(0, 120, 0, 0))
+local farmingTabBtn = createTabBtn("Farming", UDim2.new(0, 110, 0, 0))
 combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
 
+-- Persistent Kill Switch (Red button on the right side of the top bar)
+local killBtn = createBtn("EXIT", UDim2.new(1, -110, 0, 7), Color3.fromRGB(255, 60, 60), tabContainer, UDim2.new(0, 60, 0, 30))
+killBtn.MouseButton1Click:Connect(terminateScript)
+
+-- Minimize Button
+local hideBtn = createBtn("X", UDim2.new(1, -40, 0, 7), Color3.new(1,1,1), tabContainer, UDim2.new(0, 30, 0, 30))
+hideBtn.BackgroundTransparency = 1
+
+-- Page Content
 local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
@@ -124,46 +165,7 @@ lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Core Functions
-local function clearESP()
-    for _, p in pairs(Players:GetPlayers()) do
-        if p.Character then
-            local hl = p.Character:FindFirstChild("VortexESP")
-            if hl then hl:Destroy() end
-        end
-    end
-end
-
--- Kill Switch Function
-local function terminateScript()
-    isScriptActive = false
-    espEnabled = false
-    flyEnabled = false
-    noclipEnabled = false
-    
-    clearESP()
-    
-    local char = Player.Character
-    if char then
-        local hum = char:FindFirstChild("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if hum then 
-            hum.WalkSpeed = 16 
-            hum.PlatformStand = false
-        end
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
-        end
-    end
-    
-    if flyBV then flyBV:Destroy() end
-    screenGui:Destroy()
-end
-
-local killBtn = createBtn("CLOSE SCRIPT", UDim2.new(0.35, 0, 0.75, 0), Color3.fromRGB(255, 60, 60), combatPage)
-killBtn.MouseButton1Click:Connect(terminateScript)
-
--- Tab Switching Logic
+-- Functionality Connections
 combatTabBtn.MouseButton1Click:Connect(function()
     combatPage.Visible = true farmingPage.Visible = false
     combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
@@ -175,7 +177,6 @@ farmingTabBtn.MouseButton1Click:Connect(function()
     combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
 end)
 
--- Main Loop
 task.spawn(function()
     while isScriptActive and task.wait(0.5) do
         if pDropOpen and combatPage.Visible then
@@ -211,7 +212,11 @@ end)
 local function updateToggles()
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
     espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    if not espEnabled then clearESP() end
+    if not espEnabled then 
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("VortexESP") then p.Character.VortexESP:Destroy() end
+        end
+    end
     flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
     flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
     noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
@@ -281,7 +286,7 @@ end)
 
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
 
--- UI Toggle
+-- UI Toggle / Minimize Logic
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
@@ -292,8 +297,6 @@ openBtn.TextSize = 25
 openBtn.Visible = false
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
 
-local hideBtn = createBtn("X", UDim2.new(0.93, 0, 0.02, 0), Color3.fromRGB(255, 60, 60), mainFrame, UDim2.new(0, 30, 0, 30))
-hideBtn.BackgroundTransparency = 1
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
