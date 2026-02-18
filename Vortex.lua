@@ -14,7 +14,6 @@ local TargetGUI = getSafeUI()
 if TargetGUI:FindFirstChild("VortexHub") then TargetGUI.VortexHub:Destroy() end
 
 -- State Variables
-local currentTab = "Combat"
 local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
@@ -37,11 +36,27 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
--- Header / Tabs
+-- Header Tabs
 local tabContainer = Instance.new("Frame", mainFrame)
-tabContainer.Size = UDim2.new(1, 0, 0, 40)
+tabContainer.Size = UDim2.new(1, 0, 0, 45)
 tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+tabContainer.BorderSizePixel = 0
 Instance.new("UICorner", tabContainer)
+
+-- Pages
+local combatPage = Instance.new("Frame", mainFrame)
+combatPage.Name = "CombatPage"
+combatPage.Size = UDim2.new(1, 0, 1, -45)
+combatPage.Position = UDim2.new(0, 0, 0, 45)
+combatPage.BackgroundTransparency = 1
+combatPage.Visible = true
+
+local farmingPage = Instance.new("Frame", mainFrame)
+farmingPage.Name = "FarmingPage"
+farmingPage.Size = UDim2.new(1, 0, 1, -45)
+farmingPage.Position = UDim2.new(0, 0, 0, 45)
+farmingPage.BackgroundTransparency = 1
+farmingPage.Visible = false
 
 local function createTabBtn(name, pos)
     local btn = Instance.new("TextButton", tabContainer)
@@ -51,33 +66,16 @@ local function createTabBtn(name, pos)
     btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     btn.TextColor3 = Color3.new(1, 1, 1)
     btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 14
     btn.BorderSizePixel = 0
     return btn
 end
 
 local combatTabBtn = createTabBtn("Combat", UDim2.new(0, 10, 0, 0))
 local farmingTabBtn = createTabBtn("Farming", UDim2.new(0, 120, 0, 0))
+combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
 
--- Pages
-local combatPage = Instance.new("Frame", mainFrame)
-combatPage.Size = UDim2.new(1, 0, 1, -45)
-combatPage.Position = UDim2.new(0, 0, 0, 45)
-combatPage.BackgroundTransparency = 1
-
-local farmingPage = Instance.new("Frame", mainFrame)
-farmingPage.Size = UDim2.new(1, 0, 1, -45)
-farmingPage.Position = UDim2.new(0, 0, 0, 45)
-farmingPage.BackgroundTransparency = 1
-farmingPage.Visible = false
-
-local farmingLabel = Instance.new("TextLabel", farmingPage)
-farmingLabel.Size = UDim2.new(1, 0, 1, 0)
-farmingLabel.Text = "No farming functions added yet."
-farmingLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
-farmingLabel.BackgroundTransparency = 1
-farmingLabel.Font = Enum.Font.GothamItalic
-
--- Toggle Logic
+-- Tab Switching
 combatTabBtn.MouseButton1Click:Connect(function()
     combatPage.Visible = true farmingPage.Visible = false
     combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
@@ -89,7 +87,7 @@ farmingTabBtn.MouseButton1Click:Connect(function()
     combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
 end)
 
--- [EXISTING COMBAT CODE START]
+-- UI Helpers
 local function createBtn(text, pos, color, parent, size)
     local btn = Instance.new("TextButton", parent or combatPage)
     btn.Size = size or UDim2.new(0, 160, 0, 35)
@@ -116,24 +114,28 @@ local function createInput(placeholder, pos)
     return box
 end
 
-local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120))
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60))
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60))
+-- Elements (Ensured Parent is combatPage)
+local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
+
 local walkInput = createInput("Walk Speed...", UDim2.new(0.35, 0, 0.1, 0))
 local flyInput = createInput("Fly Speed...", UDim2.new(0.35, 0, 0.3, 0))
-local applyBtn = createBtn("Apply Settings", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1))
-local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1))
+local applyBtn = createBtn("Apply Settings", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1), combatPage)
+
+local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), combatPage)
 local pScroll = Instance.new("ScrollingFrame", combatPage)
 pScroll.Size = UDim2.new(0, 160, 0, 80) pScroll.Position = UDim2.new(0.66, 0, 0.2, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) pScroll.Visible = false pScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
-local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1))
+
+local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), combatPage)
 local lScroll = Instance.new("ScrollingFrame", combatPage)
 lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.7, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Helper: ESP Cleanup
+-- Core Functional Loops (Untouched Physics/Logic)
 local function clearESP()
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
@@ -143,10 +145,9 @@ local function clearESP()
     end
 end
 
--- Refresh Loops
 task.spawn(function()
     while task.wait(0.5) do
-        if pDropOpen then
+        if pDropOpen and combatPage.Visible then
             for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= Player then
@@ -246,7 +247,7 @@ end)
 
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
 
--- Master Toggle V Button
+-- UI Toggle / Master X
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
