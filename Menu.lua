@@ -21,7 +21,7 @@ local farmingAuraEnabled = false
 local walkSpeedValue = 16
 local flySpeedValue = 20
 local vehicleSpeedValue = 50
-local auraRange = 20
+local auraRange = 25
 local pDropOpen = false
 local lDropOpen = false
 local flyBV = nil
@@ -114,7 +114,7 @@ local function createInput(placeholder, pos, parent)
     return box
 end
 
--- [COMBAT PAGE]
+-- Elements
 local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
@@ -132,32 +132,29 @@ lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- [FARMING PAGE]
 local auraBtn = createBtn("Farming Aura: OFF", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(255, 60, 60), farmingPage)
 local auraInput = createInput("Aura Range...", UDim2.new(0.04, 0, 0.3, 0), farmingPage)
 local vSpeedInput = createInput("Vehicle Speed...", UDim2.new(0.35, 0, 0.1, 0), farmingPage)
 local farmApply = createBtn("Apply Farming", UDim2.new(0.35, 0, 0.3, 0), Color3.new(1,1,1), farmingPage)
 
--- Logic Loops
+-- Advanced Farming Loop (CFrame Spoofing)
 task.spawn(function()
     while task.wait(0.1) do
         if farmingAuraEnabled then
             local char = Player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             local seat = char and char:FindFirstChild("Humanoid") and char.Humanoid.SeatPart
-            local vehicle = seat and seat:FindFirstAncestorOfClass("Model") or (seat and seat.Parent)
             
-            if root and vehicle then
+            if root and seat then
                 for _, obj in pairs(workspace:GetDescendants()) do
                     if obj:IsA("BasePart") and (obj.Name:lower():find("tile") or obj.Name:lower():find("dirt") or obj.Name:lower():find("field")) then
                         if (root.Position - obj.Position).Magnitude <= auraRange then
-                            -- Force every vehicle part to touch the dirt
-                            for _, vPart in pairs(vehicle:GetDescendants()) do
-                                if vPart:IsA("BasePart") then
-                                    firetouchinterest(obj, vPart, 0)
-                                    firetouchinterest(obj, vPart, 1)
-                                end
-                            end
+                            local originalCF = obj.CFrame
+                            obj.CFrame = seat.CFrame 
+                            firetouchinterest(obj, seat, 0)
+                            task.wait()
+                            firetouchinterest(obj, seat, 1)
+                            obj.CFrame = originalCF
                         end
                     end
                 end
@@ -166,22 +163,28 @@ task.spawn(function()
     end
 end)
 
--- Universal Physics Loop
+-- Advanced Physics Loop (Vehicle Speed Injection)
 RunService.Stepped:Connect(function()
     local char = Player.Character
     if not char or not char:FindFirstChild("Humanoid") then return end
     local hum = char.Humanoid
     local root = char:FindFirstChild("HumanoidRootPart")
 
-    -- Walkspeed
     hum.WalkSpeed = walkSpeedValue
 
-    -- Vehicle Speed
+    -- Vehicle Force Speed
     if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
-        hum.SeatPart.MaxSpeed = vehicleSpeedValue
+        local seat = hum.SeatPart
+        local bv = seat:FindFirstChild("VortexVelocity") or Instance.new("BodyVelocity", seat)
+        bv.Name = "VortexVelocity"
+        if seat.Throttle ~= 0 then
+            bv.MaxForce = Vector3.new(math.huge, 0, math.huge)
+            bv.Velocity = seat.CFrame.LookVector * (seat.Throttle * vehicleSpeedValue)
+        else
+            bv.MaxForce = Vector3.new(0, 0, 0)
+        end
     end
 
-    -- Noclip/Fly
     if noclipEnabled or flyEnabled then
         for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
     elseif root then
@@ -203,14 +206,14 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Button Connectors
+-- Connectors
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
 farmApply.MouseButton1Click:Connect(function()
-    auraRange = tonumber(auraInput.Text) or 20
+    auraRange = tonumber(auraInput.Text) or 25
     vehicleSpeedValue = tonumber(vSpeedInput.Text) or 50
 end)
 
@@ -220,44 +223,7 @@ auraBtn.MouseButton1Click:Connect(function()
     auraBtn.TextColor3 = farmingAuraEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
 end)
 
--- [EXISTING TOGGLES & TELEPORT LOGIC UNTOUCHED]
-local function updateToggles()
-    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
-    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
-    flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
-    noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end
-
-espBtn.MouseButton1Click:Connect(function() espEnabled = not espEnabled updateToggles() end)
-flyBtn.MouseButton1Click:Connect(function() flyEnabled = not flyEnabled updateToggles() end)
-noclipBtn.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled updateToggles() end)
-
-lDropTitle.MouseButton1Click:Connect(function()
-    lDropOpen = not lDropOpen
-    lScroll.Visible = lDropOpen
-    if lDropOpen then
-        for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) then
-                local n = obj.Name:lower()
-                if n:find("shop") or n:find("spawn") or n:find("bank") then
-                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
-                    btn.MouseButton1Click:Connect(function()
-                        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                            Player.Character.HumanoidRootPart.CFrame = obj.CFrame + Vector3.new(0, 3, 0)
-                        end
-                    end)
-                end
-            end
-        end
-    end
-end)
-
-pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
-
--- UI Master Toggle
+-- UI Toggle and Draggables
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
@@ -273,7 +239,6 @@ hideBtn.BackgroundTransparency = 1
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
--- Draggable Logic
 local function makeDraggable(gui)
     local dragging, dragInput, dragStart, startPos
     gui.InputBegan:Connect(function(input)
