@@ -18,13 +18,11 @@ local espEnabled = true
 local flyEnabled = false
 local noclipEnabled = false
 local farmingAuraEnabled = false
+local antiFlipEnabled = false
 local walkSpeedValue = 16
 local flySpeedValue = 20
 local vehicleSpeedValue = 50
 local auraRange = 25
-local pDropOpen = false
-local lDropOpen = false
-local flyBV = nil
 
 -- UI Setup
 local screenGui = Instance.new("ScreenGui", TargetGUI)
@@ -46,7 +44,6 @@ tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 tabContainer.BorderSizePixel = 0
 Instance.new("UICorner", tabContainer)
 
--- Pages
 local combatPage = Instance.new("Frame", mainFrame)
 combatPage.Size = UDim2.new(1, 0, 1, -45)
 combatPage.Position = UDim2.new(0, 0, 0, 45)
@@ -87,7 +84,7 @@ farmingTabBtn.MouseButton1Click:Connect(function()
     combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
 end)
 
--- UI Helpers
+-- Helpers
 local function createBtn(text, pos, color, parent, size)
     local btn = Instance.new("TextButton", parent)
     btn.Size = size or UDim2.new(0, 160, 0, 35)
@@ -114,48 +111,51 @@ local function createInput(placeholder, pos, parent)
     return box
 end
 
--- Elements
+-- UI Elements
 local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local walkInput = createInput("Walk Speed...", UDim2.new(0.35, 0, 0.1, 0), combatPage)
-local flyInput = createInput("Fly Speed...", UDim2.new(0.35, 0, 0.3, 0), combatPage)
-local applyBtn = createBtn("Apply Combat", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1), combatPage)
-local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), combatPage)
-local pScroll = Instance.new("ScrollingFrame", combatPage)
-pScroll.Size = UDim2.new(0, 160, 0, 80) pScroll.Position = UDim2.new(0.66, 0, 0.2, 0)
-pScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) pScroll.Visible = false pScroll.BorderSizePixel = 0
-Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
-local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), combatPage)
-local lScroll = Instance.new("ScrollingFrame", combatPage)
-lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.7, 0)
-lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
-Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
+local applyCombat = createBtn("Apply Combat", UDim2.new(0.35, 0, 0.3, 0), Color3.new(1,1,1), combatPage)
 
 local auraBtn = createBtn("Farming Aura: OFF", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(255, 60, 60), farmingPage)
-local auraInput = createInput("Aura Range...", UDim2.new(0.04, 0, 0.3, 0), farmingPage)
-local vSpeedInput = createInput("Vehicle Speed...", UDim2.new(0.35, 0, 0.1, 0), farmingPage)
+local flipBtn = createBtn("Anti-Flip: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), farmingPage)
+local auraInput = createInput("Aura Range...", UDim2.new(0.04, 0, 0.5, 0), farmingPage)
+local vSpeedInput = createInput("Vehicle Boost...", UDim2.new(0.35, 0, 0.1, 0), farmingPage)
 local farmApply = createBtn("Apply Farming", UDim2.new(0.35, 0, 0.3, 0), Color3.new(1,1,1), farmingPage)
 
--- Advanced Farming Loop (CFrame Spoofing)
+-- Logic: Find the Plow Tool
+local function getPlowPart(vehicle)
+    for _, mod in pairs(vehicle:GetDescendants()) do
+        if mod:IsA("Model") and (mod.Name:lower():find("plow") or mod.Name:lower():find("cultivator") or mod.Name:lower():find("seeder")) then
+            return mod:FindFirstChildWhichIsA("BasePart") or mod:FindFirstChild("Handle")
+        end
+    end
+    return vehicle:FindFirstChild("VehicleSeat") or vehicle:FindFirstChildWhichIsA("BasePart")
+end
+
+-- Optimized Farming Loop
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.2) do
         if farmingAuraEnabled then
             local char = Player.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local seat = char and char:FindFirstChild("Humanoid") and char.Humanoid.SeatPart
+            local hum = char and char:FindFirstChild("Humanoid")
+            local seat = hum and hum.SeatPart
+            local vehicle = seat and seat:FindFirstAncestorOfClass("Model")
             
-            if root and seat then
-                for _, obj in pairs(workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") and (obj.Name:lower():find("tile") or obj.Name:lower():find("dirt") or obj.Name:lower():find("field")) then
-                        if (root.Position - obj.Position).Magnitude <= auraRange then
-                            local originalCF = obj.CFrame
-                            obj.CFrame = seat.CFrame 
-                            firetouchinterest(obj, seat, 0)
-                            task.wait()
-                            firetouchinterest(obj, seat, 1)
-                            obj.CFrame = originalCF
-                        end
+            if vehicle then
+                local plowPart = getPlowPart(vehicle)
+                local region = Region3.new(plowPart.Position - Vector3.new(auraRange, 5, auraRange), plowPart.Position + Vector3.new(auraRange, 5, auraRange))
+                local nearby = workspace:FindPartsInRegion3(region, nil, 50)
+
+                for _, obj in pairs(nearby) do
+                    if obj.Name:lower():find("tile") or obj.Name:lower():find("dirt") or obj.Name:lower():find("field") then
+                        local oldCF = obj.CFrame
+                        obj.CFrame = plowPart.CFrame -- Teleport dirt TO the plow
+                        firetouchinterest(obj, plowPart, 0)
+                        task.wait()
+                        firetouchinterest(obj, plowPart, 1)
+                        obj.CFrame = oldCF
                     end
                 end
             end
@@ -163,55 +163,29 @@ task.spawn(function()
     end
 end)
 
--- Advanced Physics Loop (Vehicle Speed Injection)
+-- Physics Loop
 RunService.Stepped:Connect(function()
     local char = Player.Character
     if not char or not char:FindFirstChild("Humanoid") then return end
     local hum = char.Humanoid
-    local root = char:FindFirstChild("HumanoidRootPart")
-
     hum.WalkSpeed = walkSpeedValue
 
-    -- Vehicle Force Speed
     if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
         local seat = hum.SeatPart
-        local bv = seat:FindFirstChild("VortexVelocity") or Instance.new("BodyVelocity", seat)
-        bv.Name = "VortexVelocity"
+        -- Vehicle Speed
         if seat.Throttle ~= 0 then
-            bv.MaxForce = Vector3.new(math.huge, 0, math.huge)
-            bv.Velocity = seat.CFrame.LookVector * (seat.Throttle * vehicleSpeedValue)
-        else
-            bv.MaxForce = Vector3.new(0, 0, 0)
+            seat.AssemblyLinearVelocity = seat.CFrame.LookVector * (seat.Throttle * vehicleSpeedValue)
         end
-    end
-
-    if noclipEnabled or flyEnabled then
-        for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
-    elseif root then
-        root.CanCollide = true
-    end
-
-    if flyEnabled and root then
-        hum.PlatformStand = true
-        if not flyBV or flyBV.Parent ~= root then
-            flyBV = Instance.new("BodyVelocity", root)
-            flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        -- Anti-Flip
+        if antiFlipEnabled then
+            seat.AssemblyAngularVelocity = Vector3.new(0, seat.AssemblyAngularVelocity.Y, 0)
+            local rX, rY, rZ = seat.CFrame:ToEulerAnglesXYZ()
+            seat.CFrame = CFrame.new(seat.Position) * CFrame.Angles(0, rY, 0)
         end
-        local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
-        flyBV.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
-        root.Velocity = Vector3.new(0,0,0)
-    elseif not flyEnabled and hum.PlatformStand then
-        hum.PlatformStand = false
-        if flyBV then flyBV:Destroy() flyBV = nil end
     end
 end)
 
--- Connectors
-applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-    flySpeedValue = tonumber(flyInput.Text) or 20
-end)
-
+-- Toggles
 farmApply.MouseButton1Click:Connect(function()
     auraRange = tonumber(auraInput.Text) or 25
     vehicleSpeedValue = tonumber(vSpeedInput.Text) or 50
@@ -223,22 +197,31 @@ auraBtn.MouseButton1Click:Connect(function()
     auraBtn.TextColor3 = farmingAuraEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
 end)
 
--- UI Toggle and Draggables
+flipBtn.MouseButton1Click:Connect(function()
+    antiFlipEnabled = not antiFlipEnabled
+    flipBtn.Text = "Anti-Flip: " .. (antiFlipEnabled and "ON" or "OFF")
+    flipBtn.TextColor3 = antiFlipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
+applyCombat.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+end)
+
+-- UI Toggle
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
 openBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
 openBtn.Text = "V"
-openBtn.Font = Enum.Font.GothamBold
-openBtn.TextSize = 25
 openBtn.Visible = false
-Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
+Instance.new("UICorner", openBtn)
 
 local hideBtn = createBtn("X", UDim2.new(0.93, 0, 0.02, 0), Color3.fromRGB(255, 60, 60), mainFrame, UDim2.new(0, 30, 0, 30))
 hideBtn.BackgroundTransparency = 1
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
+-- Draggable
 local function makeDraggable(gui)
     local dragging, dragInput, dragStart, startPos
     gui.InputBegan:Connect(function(input)
