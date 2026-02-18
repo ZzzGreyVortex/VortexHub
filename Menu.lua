@@ -113,7 +113,7 @@ local function createInput(placeholder, pos, parent)
     return box
 end
 
--- [COMBAT PAGE ELEMENTS]
+-- [COMBAT ELEMENTS]
 local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
@@ -131,7 +131,7 @@ lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- [FARMING PAGE ELEMENTS]
+-- [FARMING ELEMENTS]
 local auraBtn = createBtn("Farming Aura: OFF", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(255, 60, 60), farmingPage)
 local auraInput = createInput("Aura Range...", UDim2.new(0.35, 0, 0.1, 0), farmingPage)
 local auraApply = createBtn("Set Range", UDim2.new(0.35, 0, 0.3, 0), Color3.new(1,1,1), farmingPage)
@@ -146,7 +146,7 @@ local function clearESP()
     end
 end
 
--- Loops (ESP & Player List)
+-- Refresh Loop (ESP & Players)
 task.spawn(function()
     while task.wait(0.5) do
         if pDropOpen and combatPage.Visible then
@@ -179,18 +179,26 @@ task.spawn(function()
     end
 end)
 
--- Farming Aura Loop
+-- [FIXED FARMING AURA LOOP]
 task.spawn(function()
     while task.wait(0.1) do
         if farmingAuraEnabled then
             local char = Player.Character
             local tool = char and char:FindFirstChildOfClass("Tool")
             local root = char and char:FindFirstChild("HumanoidRootPart")
+            
             if root and tool then
-                for _, obj in pairs(workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") and (obj.Name:lower():find("tile") or obj.Name:lower():find("dirt") or obj.Name:lower():find("field")) then
-                        if (root.Position - obj.Position).Magnitude <= auraRange then
-                            tool:Activate()
+                local toolPart = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
+                if toolPart then
+                    for _, obj in pairs(workspace:GetDescendants()) do
+                        if obj:IsA("BasePart") and (obj.Name:lower():find("tile") or obj.Name:lower():find("dirt") or obj.Name:lower():find("field")) then
+                            if (root.Position - obj.Position).Magnitude <= auraRange then
+                                tool:Activate()
+                                -- Force touch bypasses game limits
+                                firetouchinterest(obj, toolPart, 0)
+                                task.wait()
+                                firetouchinterest(obj, toolPart, 1)
+                            end
                         end
                     end
                 end
@@ -257,7 +265,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Locations/Drop Logic
 lDropTitle.MouseButton1Click:Connect(function()
     lDropOpen = not lDropOpen
     lScroll.Visible = lDropOpen
@@ -282,7 +289,7 @@ end)
 
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
 
--- UI Master Toggle
+-- UI Toggle
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
