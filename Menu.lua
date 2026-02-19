@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- Master Cleanup: Ensure no old versions are running
+-- Master Cleanup
 local function getSafeUI()
     local success, result = pcall(function()
         return (gethui and gethui()) or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -14,7 +14,7 @@ end
 local TargetGUI = getSafeUI()
 if TargetGUI:FindFirstChild("VortexHub") then 
     TargetGUI.VortexHub:Destroy() 
-    task.wait(0.1) -- Small delay to ensure memory is cleared
+    task.wait(0.1)
 end
 
 -- State Variables
@@ -41,7 +41,7 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
--- Header Bar (The persistent container)
+-- Header Bar
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 45)
 tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -62,25 +62,39 @@ local function createBtn(text, pos, color, parent, size)
     return btn
 end
 
--- KILL SWITCH FUNCTION
+local function createInput(placeholder, pos, parent)
+    local box = Instance.new("TextBox", parent)
+    box.Size = UDim2.new(0, 160, 0, 35)
+    box.Position = pos
+    box.PlaceholderText = placeholder
+    box.Text = ""
+    box.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    box.TextColor3 = Color3.new(1, 1, 1)
+    box.Font = Enum.Font.Gotham
+    Instance.new("UICorner", box)
+    return box
+end
+
+-- TERMINATE FUNCTION
 local function terminateScript()
     isScriptActive = false
-    espEnabled = false
-    flyEnabled = false
-    noclipEnabled = false
     
-    -- Clean ESP
+    -- Clear ESP
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character and p.Character:FindFirstChild("VortexESP") then
             p.Character.VortexESP:Destroy()
         end
     end
     
-    -- Reset Character
+    -- Reset Character Physics
     local char = Player.Character
     if char then
         local hum = char:FindFirstChild("Humanoid")
-        if hum then hum.WalkSpeed = 16 hum.PlatformStand = false end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if hum then 
+            hum.WalkSpeed = 16 
+            hum.PlatformStand = false
+        end
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = true end
         end
@@ -90,7 +104,7 @@ local function terminateScript()
     screenGui:Destroy()
 end
 
--- TOP BAR BUTTONS (These never disappear)
+-- Persistent Header Buttons
 local combatTabBtn = createBtn("Combat", UDim2.new(0, 10, 0, 7), Color3.fromRGB(0, 255, 120), tabContainer, UDim2.new(0, 90, 0, 30))
 local farmingTabBtn = createBtn("Farming", UDim2.new(0, 105, 0, 7), Color3.new(1, 1, 1), tabContainer, UDim2.new(0, 90, 0, 30))
 local exitBtn = createBtn("EXIT", UDim2.new(1, -110, 0, 7), Color3.fromRGB(255, 60, 60), tabContainer, UDim2.new(0, 60, 0, 30))
@@ -111,7 +125,33 @@ farmingPage.Position = UDim2.new(0, 0, 0, 45)
 farmingPage.BackgroundTransparency = 1
 farmingPage.Visible = false
 
--- Elements & Logic Connections
+-- Combat Page Elements
+local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
+local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
+local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
+
+local walkInput = createInput("Walk Speed...", UDim2.new(0.35, 0, 0.1, 0), combatPage)
+local flyInput = createInput("Fly Speed...", UDim2.new(0.35, 0, 0.3, 0), combatPage)
+local applyBtn = createBtn("Apply Settings", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1), combatPage)
+
+local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), combatPage)
+local pScroll = Instance.new("ScrollingFrame", combatPage)
+pScroll.Size = UDim2.new(0, 160, 0, 80) pScroll.Position = UDim2.new(0.66, 0, 0.2, 0)
+pScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) pScroll.Visible = false pScroll.BorderSizePixel = 0
+Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
+
+local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), combatPage)
+local lScroll = Instance.new("ScrollingFrame", combatPage)
+lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.7, 0)
+lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
+Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
+
+-- Functionality
+applyBtn.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+    flySpeedValue = tonumber(flyInput.Text) or 20
+end)
+
 combatTabBtn.MouseButton1Click:Connect(function()
     combatPage.Visible = true farmingPage.Visible = false
     combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
@@ -124,12 +164,40 @@ farmingTabBtn.MouseButton1Click:Connect(function()
     combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
 end)
 
--- Standard Buttons (Combat Page)
-local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
-local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
-local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
+-- Main Background Loop (ESP and Player Lists)
+task.spawn(function()
+    while isScriptActive and task.wait(0.5) do
+        if pDropOpen and combatPage.Visible then
+            for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player then
+                    local btn = createBtn(p.DisplayName, nil, Color3.new(1,1,1), pScroll, UDim2.new(1, 0, 0, 25))
+                    btn.MouseButton1Click:Connect(function()
+                        local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                        local targetRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot and targetRoot then myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3) end
+                    end)
+                end
+            end
+            pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
+        end
+        
+        if espEnabled then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character then
+                    if not p.Character:FindFirstChild("VortexESP") then
+                        local hl = Instance.new("Highlight", p.Character)
+                        hl.Name = "VortexESP"
+                        hl.FillTransparency = 0.5
+                        hl.FillColor = Color3.fromRGB(255, 0, 0)
+                    end
+                end
+            end
+        end
+    end
+end)
 
--- Main Physics Loop
+-- Physics Loop
 RunService.Stepped:Connect(function()
     if not isScriptActive then return end
     local char = Player.Character
@@ -138,6 +206,7 @@ RunService.Stepped:Connect(function()
         local root = char.HumanoidRootPart
         
         hum.WalkSpeed = walkSpeedValue
+        
         if noclipEnabled or flyEnabled then
             for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
         else
@@ -159,7 +228,56 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Minimize Button Logic
+-- Dropdown Toggles
+pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
+lDropTitle.MouseButton1Click:Connect(function()
+    lDropOpen = not lDropOpen
+    lScroll.Visible = lDropOpen
+    if lDropOpen then
+        for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+        local added = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not added[obj.Name] then
+                local n = obj.Name:lower()
+                if n:find("shop") or n:find("store") or n:find("spawn") or n:find("bank") or n:find("npc") then
+                    added[obj.Name] = true
+                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
+                    btn.MouseButton1Click:Connect(function()
+                        local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot then myRoot.CFrame = obj.CFrame + Vector3.new(0, 3, 0) end
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- Feature Toggles
+espBtn.MouseButton1Click:Connect(function() 
+    espEnabled = not espEnabled 
+    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
+    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    if not espEnabled then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("VortexESP") then p.Character.VortexESP:Destroy() end
+        end
+    end
+end)
+
+flyBtn.MouseButton1Click:Connect(function() 
+    flyEnabled = not flyEnabled 
+    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
+    flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    if not flyEnabled and flyBV then flyBV:Destroy() flyBV = nil end
+end)
+
+noclipBtn.MouseButton1Click:Connect(function() 
+    noclipEnabled = not noclipEnabled 
+    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
+    noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
+-- Minimize/Open Buttons
 local openBtn = Instance.new("TextButton", screenGui)
 openBtn.Size = UDim2.new(0, 50, 0, 50)
 openBtn.Position = UDim2.new(0, 20, 0.5, -25)
@@ -173,7 +291,7 @@ Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 15)
 hideBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false openBtn.Visible = true end)
 openBtn.MouseButton1Click:Connect(function() mainFrame.Visible = true openBtn.Visible = false end)
 
--- Draggable
+-- Draggable logic
 local function makeDraggable(gui)
     local dragging, dragInput, dragStart, startPos
     gui.InputBegan:Connect(function(input)
@@ -192,23 +310,3 @@ local function makeDraggable(gui)
 end
 makeDraggable(mainFrame)
 makeDraggable(openBtn)
-
--- Toggle Actions
-espBtn.MouseButton1Click:Connect(function() 
-    espEnabled = not espEnabled 
-    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
-    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end)
-
-flyBtn.MouseButton1Click:Connect(function() 
-    flyEnabled = not flyEnabled 
-    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
-    flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    if not flyEnabled and flyBV then flyBV:Destroy() flyBV = nil end
-end)
-
-noclipBtn.MouseButton1Click:Connect(function() 
-    noclipEnabled = not noclipEnabled 
-    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
-    noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-end)
