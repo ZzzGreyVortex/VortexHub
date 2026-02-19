@@ -85,7 +85,7 @@ local function clearAllESP()
     end
 end
 
--- EXIT / KILL SWITCH
+-- KILL SWITCH
 local function terminateScript()
     isScriptActive = false
     espEnabled = false
@@ -132,29 +132,34 @@ local walkInput = createInput("Walk Speed...", UDim2.new(0.35, 0, 0.1, 0), comba
 local flyInput = createInput("Fly Speed...", UDim2.new(0.35, 0, 0.3, 0), combatPage)
 local applyBtn = createBtn("Apply Settings", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1), combatPage)
 
--- Farming UI
-local vehLabel = Instance.new("TextLabel", farmingPage)
-vehLabel.Size = UDim2.new(0, 200, 0, 30)
-vehLabel.Position = UDim2.new(0.04, 0, 0.05, 0)
-vehLabel.Text = "VEHICLE POWER BOOST"
-vehLabel.TextColor3 = Color3.new(1,1,1)
-vehLabel.BackgroundTransparency = 1
-vehLabel.Font = Enum.Font.GothamBold
-
-local vehInput = createInput("Power (Try 0.5-2)...", UDim2.new(0.04, 0, 0.15, 0), farmingPage)
-local vehApplyBtn = createBtn("Apply Power", UDim2.new(0.04, 0, 0.28, 0), Color3.fromRGB(0, 180, 255), farmingPage)
-
-local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), farmingPage)
-local pScroll = Instance.new("ScrollingFrame", farmingPage)
+-- Teleports moved back to Combat
+local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), combatPage)
+local pScroll = Instance.new("ScrollingFrame", combatPage)
 pScroll.Size = UDim2.new(0, 160, 0, 80) pScroll.Position = UDim2.new(0.66, 0, 0.2, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) pScroll.Visible = false pScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
-local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), farmingPage)
-local lScroll = Instance.new("ScrollingFrame", farmingPage)
+local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), combatPage)
+local lScroll = Instance.new("ScrollingFrame", combatPage)
 lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.7, 0)
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
+
+-- Farming UI
+local vehLabel = Instance.new("TextLabel", farmingPage)
+vehLabel.Size = UDim2.new(0, 200, 0, 30)
+vehLabel.Position = UDim2.new(0.04, 0, 0.05, 0)
+vehLabel.Text = "VEHICLE FORCE BOOST"
+vehLabel.TextColor3 = Color3.new(1,1,1)
+vehLabel.BackgroundTransparency = 1
+vehLabel.Font = Enum.Font.GothamBold
+
+local vehInput = createInput("Power (e.g. 100)...", UDim2.new(0.04, 0, 0.15, 0), farmingPage)
+local vehApplyBtn = createBtn("Apply Power", UDim2.new(0.04, 0, 0.28, 0), Color3.fromRGB(0, 180, 255), farmingPage)
+
+vehApplyBtn.MouseButton1Click:Connect(function()
+    vehiclePowerValue = tonumber(vehInput.Text) or 0
+end)
 
 -- MAIN PHYSICS LOOP
 RunService.Stepped:Connect(function()
@@ -164,16 +169,12 @@ RunService.Stepped:Connect(function()
         local hum = char.Humanoid
         hum.WalkSpeed = walkSpeedValue
         
-        -- FIXED VEHICLE LOGIC
+        -- UPDATED VEHICLE FORCE LOGIC
         if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
             local seat = hum.SeatPart
-            local moveDir = seat.Throttle
-            if moveDir ~= 0 and vehiclePowerValue > 0 then
-                -- Locate the actual model instead of just the parent folder
-                local carModel = seat:FindFirstAncestorOfClass("Model")
-                if carModel then
-                    carModel:PivotTo(carModel:GetPivot() * CFrame.new(0, 0, -moveDir * vehiclePowerValue))
-                end
+            if vehiclePowerValue > 0 and seat.Throttle ~= 0 then
+                local root = seat:FindFirstAncestorOfClass("Model") and seat:FindFirstAncestorOfClass("Model").PrimaryPart or seat
+                root.AssemblyLinearVelocity = root.CFrame.LookVector * (seat.Throttle * vehiclePowerValue)
             end
         end
 
@@ -205,7 +206,7 @@ task.spawn(function()
     while task.wait(0.5) do
         if not isScriptActive then break end
         
-        if pDropOpen and farmingPage.Visible then
+        if pDropOpen and combatPage.Visible then
             for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= Player then
@@ -237,10 +238,6 @@ end)
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
-end)
-
-vehApplyBtn.MouseButton1Click:Connect(function()
-    vehiclePowerValue = tonumber(vehInput.Text) or 0
 end)
 
 combatTabBtn.MouseButton1Click:Connect(function()
