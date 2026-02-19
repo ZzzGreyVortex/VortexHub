@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- Master Cleanup: Ensures old UI is removed before starting
+-- Master Cleanup
 local function getSafeUI()
     local success, result = pcall(function()
         return (gethui and gethui()) or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -141,7 +141,7 @@ vehLabel.TextColor3 = Color3.new(1,1,1)
 vehLabel.BackgroundTransparency = 1
 vehLabel.Font = Enum.Font.GothamBold
 
-local vehInput = createInput("Power (e.g. 1)...", UDim2.new(0.04, 0, 0.15, 0), farmingPage)
+local vehInput = createInput("Power (Try 0.5-2)...", UDim2.new(0.04, 0, 0.15, 0), farmingPage)
 local vehApplyBtn = createBtn("Apply Power", UDim2.new(0.04, 0, 0.28, 0), Color3.fromRGB(0, 180, 255), farmingPage)
 
 local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), farmingPage)
@@ -164,12 +164,16 @@ RunService.Stepped:Connect(function()
         local hum = char.Humanoid
         hum.WalkSpeed = walkSpeedValue
         
-        -- Vehicle Power Logic (CFrame Pushing)
+        -- FIXED VEHICLE LOGIC
         if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
             local seat = hum.SeatPart
             local moveDir = seat.Throttle
             if moveDir ~= 0 and vehiclePowerValue > 0 then
-                seat.Parent:SetPrimaryPartCFrame(seat.Parent:GetPrimaryPartCFrame() * CFrame.new(0, 0, -moveDir * vehiclePowerValue))
+                -- Locate the actual model instead of just the parent folder
+                local carModel = seat:FindFirstAncestorOfClass("Model")
+                if carModel then
+                    carModel:PivotTo(carModel:GetPivot() * CFrame.new(0, 0, -moveDir * vehiclePowerValue))
+                end
             end
         end
 
