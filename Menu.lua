@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 
--- Master Cleanup
+-- Master Cleanup: Prevent multiple script instances
 local function getSafeUI()
     local success, result = pcall(function()
         return (gethui and gethui()) or game:GetService("CoreGui") or Player:WaitForChild("PlayerGui")
@@ -24,7 +24,7 @@ local flyEnabled = false
 local noclipEnabled = false
 local walkSpeedValue = 16
 local flySpeedValue = 20
-local vehicleSpeedValue = 50 -- Default vehicle speed
+local vehicleBoostMultiplier = 1
 local pDropOpen = false
 local lDropOpen = false
 local flyBV = nil
@@ -42,7 +42,7 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
 
--- Header Bar
+-- Header Bar (Persistent)
 local tabContainer = Instance.new("Frame", mainFrame)
 tabContainer.Size = UDim2.new(1, 0, 0, 45)
 tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -85,7 +85,7 @@ local function clearAllESP()
     end
 end
 
--- TERMINATE FUNCTION
+-- KILL SWITCH
 local function terminateScript()
     isScriptActive = false
     espEnabled = false
@@ -124,34 +124,40 @@ farmingPage.Position = UDim2.new(0, 0, 0, 45)
 farmingPage.BackgroundTransparency = 1
 farmingPage.Visible = false
 
--- Combat Elements
+-- Combat Page Elements
 local espBtn = createBtn("ESP: ON", UDim2.new(0.04, 0, 0.1, 0), Color3.fromRGB(0, 255, 120), combatPage)
 local flyBtn = createBtn("Fly: OFF", UDim2.new(0.04, 0, 0.3, 0), Color3.fromRGB(255, 60, 60), combatPage)
 local noclipBtn = createBtn("Noclip: OFF", UDim2.new(0.04, 0, 0.5, 0), Color3.fromRGB(255, 60, 60), combatPage)
+
 local walkInput = createInput("Walk Speed...", UDim2.new(0.35, 0, 0.1, 0), combatPage)
 local flyInput = createInput("Fly Speed...", UDim2.new(0.35, 0, 0.3, 0), combatPage)
 local applyBtn = createBtn("Apply Settings", UDim2.new(0.35, 0, 0.5, 0), Color3.new(1,1,1), combatPage)
 
--- Farming Elements (New Vehicle Speed)
+-- Farming Page Elements
 local vehLabel = Instance.new("TextLabel", farmingPage)
-vehLabel.Size = UDim2.new(0, 160, 0, 30)
-vehLabel.Position = UDim2.new(0.04, 0, 0.1, 0)
-vehLabel.Text = "VEHICLE MODS"
+vehLabel.Size = UDim2.new(0, 200, 0, 30)
+vehLabel.Position = UDim2.new(0.04, 0, 0.05, 0)
+vehLabel.Text = "VEHICLE VELOCITY BOOST"
 vehLabel.TextColor3 = Color3.new(1,1,1)
 vehLabel.BackgroundTransparency = 1
 vehLabel.Font = Enum.Font.GothamBold
 
-local vehInput = createInput("Vehicle Speed...", UDim2.new(0.04, 0, 0.2, 0), farmingPage)
-local vehApplyBtn = createBtn("Apply Vehicle Speed", UDim2.new(0.04, 0, 0.35, 0), Color3.fromRGB(0, 180, 255), farmingPage)
+local vehInput = createInput("Multiplier (e.g. 2)...", UDim2.new(0.04, 0, 0.15, 0), farmingPage)
+local vehApplyBtn = createBtn("Apply Boost", UDim2.new(0.04, 0, 0.28, 0), Color3.fromRGB(0, 180, 255), farmingPage)
 
--- Teleport Logic
-local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), combatPage)
-local pScroll = Instance.new("ScrollingFrame", combatPage)
+local pDropTitle = createBtn("Select Player ▽", UDim2.new(0.66, 0, 0.05, 0), Color3.new(1,1,1), farmingPage)
+local pScroll = Instance.new("ScrollingFrame", farmingPage)
 pScroll.Size = UDim2.new(0, 160, 0, 80) pScroll.Position = UDim2.new(0.66, 0, 0.2, 0)
 pScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) pScroll.Visible = false pScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", pScroll).Padding = UDim.new(0, 2)
 
--- Physics Loop (Includes Vehicle Update)
+local lDropTitle = createBtn("Locations ▽", UDim2.new(0.66, 0, 0.55, 0), Color3.new(1,1,1), farmingPage)
+local lScroll = Instance.new("ScrollingFrame", farmingPage)
+lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.7, 0)
+lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
+Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
+
+-- Physics & Vehicle Loop
 RunService.Stepped:Connect(function()
     if not isScriptActive then return end
     local char = Player.Character
@@ -159,9 +165,11 @@ RunService.Stepped:Connect(function()
         local hum = char.Humanoid
         hum.WalkSpeed = walkSpeedValue
         
-        -- Vehicle Speed Logic
+        -- Vehicle Velocity Boost
         if hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
-            hum.SeatPart.MaxSpeed = vehicleSpeedValue
+            if vehicleBoostMultiplier > 1 then
+                hum.SeatPart.AssemblyLinearVelocity = hum.SeatPart.AssemblyLinearVelocity * Vector3.new(vehicleBoostMultiplier, 1, vehicleBoostMultiplier)
+            end
         end
 
         if noclipEnabled or flyEnabled then
@@ -169,32 +177,78 @@ RunService.Stepped:Connect(function()
         elseif char:FindFirstChild("HumanoidRootPart") then
             char.HumanoidRootPart.CanCollide = true
         end
+
+        if flyEnabled and char:FindFirstChild("HumanoidRootPart") then
+            hum.PlatformStand = true
+            if not flyBV or flyBV.Parent ~= char.HumanoidRootPart then
+                flyBV = Instance.new("BodyVelocity", char.HumanoidRootPart)
+                flyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            end
+            local up = UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or (UserInputService:IsKeyDown(Enum.KeyCode.Q) and -1 or 0)
+            flyBV.Velocity = (hum.MoveDirection * flySpeedValue) + Vector3.new(0, up * flySpeedValue, 0)
+            char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+        elseif hum.PlatformStand then
+            hum.PlatformStand = false
+            if flyBV then flyBV:Destroy() flyBV = nil end
+        end
     end
 end)
 
--- Tab Switching
-combatTabBtn.MouseButton1Click:Connect(function()
-    combatPage.Visible = true farmingPage.Visible = false
-    combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
-    farmingTabBtn.TextColor3 = Color3.new(1, 1, 1)
-end)
-farmingTabBtn.MouseButton1Click:Connect(function()
-    farmingPage.Visible = true combatPage.Visible = false
-    farmingTabBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
-    combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
+-- Main Background Loop (ESP/Lists)
+task.spawn(function()
+    while task.wait(0.5) do
+        if not isScriptActive then break end
+        
+        if pDropOpen and farmingPage.Visible then
+            for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player then
+                    local btn = createBtn(p.DisplayName, nil, Color3.new(1,1,1), pScroll, UDim2.new(1, 0, 0, 25))
+                    btn.MouseButton1Click:Connect(function()
+                        local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                        local targetRoot = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot and targetRoot then myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3) end
+                    end)
+                end
+            end
+            pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
+        end
+        
+        if espEnabled and isScriptActive then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= Player and p.Character and not p.Character:FindFirstChild("VortexESP") then
+                    local hl = Instance.new("Highlight", p.Character)
+                    hl.Name = "VortexESP"
+                    hl.FillTransparency = 0.5
+                    hl.FillColor = Color3.fromRGB(255, 0, 0)
+                end
+            end
+        end
+    end
 end)
 
--- Apply Button Connections
+-- Logic Connections
 applyBtn.MouseButton1Click:Connect(function()
     walkSpeedValue = tonumber(walkInput.Text) or 16
     flySpeedValue = tonumber(flyInput.Text) or 20
 end)
 
 vehApplyBtn.MouseButton1Click:Connect(function()
-    vehicleSpeedValue = tonumber(vehInput.Text) or 50
+    vehicleBoostMultiplier = tonumber(vehInput.Text) or 1
 end)
 
--- Toggle Connections
+combatTabBtn.MouseButton1Click:Connect(function()
+    combatPage.Visible = true farmingPage.Visible = false
+    combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
+    farmingTabBtn.TextColor3 = Color3.new(1, 1, 1)
+end)
+
+farmingTabBtn.MouseButton1Click:Connect(function()
+    farmingPage.Visible = true combatPage.Visible = false
+    farmingTabBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+    combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
+end)
+
 espBtn.MouseButton1Click:Connect(function() 
     espEnabled = not espEnabled 
     espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
@@ -212,6 +266,29 @@ noclipBtn.MouseButton1Click:Connect(function()
     noclipEnabled = not noclipEnabled 
     noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
     noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
+pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
+lDropTitle.MouseButton1Click:Connect(function()
+    lDropOpen = not lDropOpen
+    lScroll.Visible = lDropOpen
+    if lDropOpen then
+        for _, child in pairs(lScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+        local added = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) and not added[obj.Name] then
+                local n = obj.Name:lower()
+                if n:find("shop") or n:find("store") or n:find("spawn") or n:find("bank") or n:find("npc") then
+                    added[obj.Name] = true
+                    local btn = createBtn(obj.Name, nil, Color3.fromRGB(0, 180, 255), lScroll, UDim2.new(1, 0, 0, 25))
+                    btn.MouseButton1Click:Connect(function()
+                        local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot then myRoot.CFrame = obj.CFrame + Vector3.new(0, 3, 0) end
+                    end)
+                end
+            end
+        end
+    end
 end)
 
 -- Minimize Logic
@@ -247,20 +324,3 @@ local function makeDraggable(gui)
 end
 makeDraggable(mainFrame)
 makeDraggable(openBtn)
-
--- ESP Background Task
-task.spawn(function()
-    while task.wait(0.5) do
-        if not isScriptActive then break end
-        if espEnabled then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= Player and p.Character and not p.Character:FindFirstChild("VortexESP") then
-                    local hl = Instance.new("Highlight", p.Character)
-                    hl.Name = "VortexESP"
-                    hl.FillTransparency = 0.5
-                    hl.FillColor = Color3.fromRGB(255, 0, 0)
-                end
-            end
-        end
-    end
-end)
