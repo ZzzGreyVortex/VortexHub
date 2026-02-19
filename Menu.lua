@@ -75,22 +75,26 @@ local function createInput(placeholder, pos, parent)
     return box
 end
 
--- TERMINATE FUNCTION
-local function terminateScript()
-    isScriptActive = false
-    
-    -- Clear ESP
+-- CLEANUP FUNCTION (Used by Exit and Toggles)
+local function clearAllESP()
     for _, p in pairs(Players:GetPlayers()) do
-        if p.Character and p.Character:FindFirstChild("VortexESP") then
-            p.Character.VortexESP:Destroy()
+        if p.Character then
+            local hl = p.Character:FindFirstChild("VortexESP")
+            if hl then hl:Destroy() end
         end
     end
+end
+
+-- TERMINATE FUNCTION
+local function terminateScript()
+    isScriptActive = false -- Immediately stop loops
+    espEnabled = false
     
-    -- Reset Character Physics
+    clearAllESP() -- First pass cleanup
+    
     local char = Player.Character
     if char then
         local hum = char:FindFirstChild("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
         if hum then 
             hum.WalkSpeed = 16 
             hum.PlatformStand = false
@@ -101,6 +105,9 @@ local function terminateScript()
     end
     
     if flyBV then flyBV:Destroy() end
+    
+    task.wait(0.1)
+    clearAllESP() -- Final pass cleanup to catch any "race condition" highlights
     screenGui:Destroy()
 end
 
@@ -146,27 +153,11 @@ lScroll.Size = UDim2.new(0, 160, 0, 80) lScroll.Position = UDim2.new(0.66, 0, 0.
 lScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20) lScroll.Visible = false lScroll.BorderSizePixel = 0
 Instance.new("UIListLayout", lScroll).Padding = UDim.new(0, 2)
 
--- Functionality
-applyBtn.MouseButton1Click:Connect(function()
-    walkSpeedValue = tonumber(walkInput.Text) or 16
-    flySpeedValue = tonumber(flyInput.Text) or 20
-end)
-
-combatTabBtn.MouseButton1Click:Connect(function()
-    combatPage.Visible = true farmingPage.Visible = false
-    combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
-    farmingTabBtn.TextColor3 = Color3.new(1, 1, 1)
-end)
-
-farmingTabBtn.MouseButton1Click:Connect(function()
-    combatPage.Visible = false farmingPage.Visible = true
-    farmingTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
-    combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
-end)
-
--- Main Background Loop (ESP and Player Lists)
+-- Main Background Loop
 task.spawn(function()
-    while isScriptActive and task.wait(0.5) do
+    while task.wait(0.5) do
+        if not isScriptActive then break end -- Hard stop for the loop
+        
         if pDropOpen and combatPage.Visible then
             for _, child in pairs(pScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
             for _, p in pairs(Players:GetPlayers()) do
@@ -182,8 +173,9 @@ task.spawn(function()
             pScroll.CanvasSize = UDim2.new(0, 0, 0, #pScroll:GetChildren() * 27)
         end
         
-        if espEnabled then
+        if espEnabled and isScriptActive then
             for _, p in pairs(Players:GetPlayers()) do
+                if not isScriptActive then break end
                 if p ~= Player and p.Character then
                     if not p.Character:FindFirstChild("VortexESP") then
                         local hl = Instance.new("Highlight", p.Character)
@@ -204,15 +196,12 @@ RunService.Stepped:Connect(function()
     if char and char:FindFirstChild("Humanoid") and char:FindFirstChild("HumanoidRootPart") then
         local hum = char.Humanoid
         local root = char.HumanoidRootPart
-        
         hum.WalkSpeed = walkSpeedValue
-        
         if noclipEnabled or flyEnabled then
             for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
         else
             root.CanCollide = true
         end
-        
         if flyEnabled then
             hum.PlatformStand = true
             if not flyBV or flyBV.Parent ~= root then
@@ -228,7 +217,44 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Dropdown Toggles
+-- Buttons & Toggles
+applyBtn.MouseButton1Click:Connect(function()
+    walkSpeedValue = tonumber(walkInput.Text) or 16
+    flySpeedValue = tonumber(flyInput.Text) or 20
+end)
+
+espBtn.MouseButton1Click:Connect(function() 
+    espEnabled = not espEnabled 
+    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
+    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    if not espEnabled then clearAllESP() end
+end)
+
+flyBtn.MouseButton1Click:Connect(function() 
+    flyEnabled = not flyEnabled 
+    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
+    flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+    if not flyEnabled and flyBV then flyBV:Destroy() flyBV = nil end
+end)
+
+noclipBtn.MouseButton1Click:Connect(function() 
+    noclipEnabled = not noclipEnabled 
+    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
+    noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
+end)
+
+combatTabBtn.MouseButton1Click:Connect(function()
+    combatPage.Visible = true farmingPage.Visible = false
+    combatTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
+    farmingTabBtn.TextColor3 = Color3.new(1, 1, 1)
+end)
+
+farmingTabBtn.MouseButton1Click:Connect(function()
+    combatPage.Visible = false farmingPage.Visible = true
+    farmingTabBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
+    combatTabBtn.TextColor3 = Color3.new(1, 1, 1)
+end)
+
 pDropTitle.MouseButton1Click:Connect(function() pDropOpen = not pDropOpen pScroll.Visible = pDropOpen end)
 lDropTitle.MouseButton1Click:Connect(function()
     lDropOpen = not lDropOpen
@@ -250,31 +276,6 @@ lDropTitle.MouseButton1Click:Connect(function()
             end
         end
     end
-end)
-
--- Feature Toggles
-espBtn.MouseButton1Click:Connect(function() 
-    espEnabled = not espEnabled 
-    espBtn.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
-    espBtn.TextColor3 = espEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    if not espEnabled then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character and p.Character:FindFirstChild("VortexESP") then p.Character.VortexESP:Destroy() end
-        end
-    end
-end)
-
-flyBtn.MouseButton1Click:Connect(function() 
-    flyEnabled = not flyEnabled 
-    flyBtn.Text = "Fly: " .. (flyEnabled and "ON" or "OFF")
-    flyBtn.TextColor3 = flyEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
-    if not flyEnabled and flyBV then flyBV:Destroy() flyBV = nil end
-end)
-
-noclipBtn.MouseButton1Click:Connect(function() 
-    noclipEnabled = not noclipEnabled 
-    noclipBtn.Text = "Noclip: " .. (noclipEnabled and "ON" or "OFF")
-    noclipBtn.TextColor3 = noclipEnabled and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 60, 60)
 end)
 
 -- Minimize/Open Buttons
